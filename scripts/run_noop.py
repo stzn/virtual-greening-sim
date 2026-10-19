@@ -10,12 +10,12 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
-from vmgs.weather.cache import load_records  # noqa: E402
-from vmgs.weather.providers import SeriesWeather  # noqa: E402
-from vmgs.world.clock import SimClock  # noqa: E402
-from vmgs.world.world import World  # noqa: E402
+from vmgs.weather.cache import load_records
+from vmgs.weather.providers import SeriesWeather
+from vmgs.world.clock import SimClock
+from vmgs.world.world import World
 
 SCENARIOS = ("heatwave", "normal", "rainy")
 
