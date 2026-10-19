@@ -8,6 +8,11 @@
   - [x] 1-1〜1-6 実装（Open-Meteo、キャッシュ、シナリオ3日分、World、5ツール、docs/model.md）
   - [x] 1-7 ステップ定義を実装して Green に / 1-8 noop 24h グラフ（runs/noop/）
 - [ ] フェーズ2: 最小 Agent Loop
+  - [x] 2-0 グラフ制御の feature（tests/features/agent/graph.feature 11件・Red確認済み）
+  - [x] 2-0b 評価シナリオ（evals/features 4本8件・Red確認済み。実行: `uv run pytest evals -m eval`）
+  - [ ] 2-1 システムプロンプト v1 / 2-2 LangGraph 1ターングラフ（agent⇄tool→finalize）/ 2-3 turn CLI
+  - [ ] 2-6 グラフ制御のステップ定義（Fake チャットモデル）を実装して Green に
+  - [ ] 2-7 評価シナリオのステップ定義を実装し、実LLMで初回スコアを記録
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 
