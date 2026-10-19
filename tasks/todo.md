@@ -3,10 +3,10 @@
 詳細は docs/PLAN.md §6 を参照。
 
 - [x] フェーズ0: 準備（uv init / 依存追加 / pytest-bdd の日本語サンプル feature が緑）
-- [ ] フェーズ1: 仮想環境とツール
+- [x] フェーズ1: 仮想環境とツール（55テスト緑・mypy strict/ruff 通過）
   - [x] 1-0 feature作成（world 3本 / tools 1本、計37シナリオ、Red確認済み）
-  - [ ] 1-1〜1-6 実装（Open-Meteo、キャッシュ、World、ツール）
-  - [ ] 1-7 ステップ定義を実装して Green に
+  - [x] 1-1〜1-6 実装（Open-Meteo、キャッシュ、シナリオ3日分、World、5ツール、docs/model.md）
+  - [x] 1-7 ステップ定義を実装して Green に / 1-8 noop 24h グラフ（runs/noop/）
 - [ ] フェーズ2: 最小 Agent Loop
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
 - [ ] フェーズ4: 可観測性とプロンプト最適化
