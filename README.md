@@ -29,3 +29,24 @@ uv run vmgs turn --scenario heatwave --hour 13 --spot C --provider ollama --mode
 # LLM判断品質の評価（5回試行、結果は runs/evals/ に保存）
 uv run pytest evals -m eval
 ```
+
+### Ollama（ローカルのオープンウェイトLLM）のセットアップ
+
+```bash
+brew install ollama          # または https://ollama.com/download のアプリ版（起動すればサーバーも自動起動）
+ollama serve                 # 別ターミナルで起動したままにする（アプリ版は不要）
+ollama pull qwen3:14b        # 約9GB。ツール呼び出し(Function Calling)対応モデルを選ぶ
+ollama list                  # qwen3:14b が表示されれば準備完了
+```
+
+`.env` に次を設定する（ファイルは `~/virtual-greening-sim/.env`、コミットしない）:
+
+```
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen3:14b
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+- メモリが厳しい場合は `qwen3:8b` に変更する。
+- Qwen3 は思考(thinking)を出力するため、最終回答のJSON解釈に影響することがある（問題が出たら要対応）。
+- 接続できない場合、`vmgs turn` は「判断失敗（接続エラー）」として記録して終了し、評価(`pytest evals`)は理由付きでスキップされる。
