@@ -10,9 +10,9 @@
 - [ ] フェーズ2: 最小 Agent Loop
   - [x] 2-0 グラフ制御の feature（tests/features/agent/graph.feature 11件・Red確認済み）
   - [x] 2-0b 評価シナリオ（evals/features 4本8件・Red確認済み。実行: `uv run pytest evals -m eval`）
-  - [ ] 2-1 システムプロンプト v1 / 2-2 LangGraph 1ターングラフ（agent⇄tool→finalize）/ 2-3 turn CLI
-  - [ ] 2-6 グラフ制御のステップ定義（Fake チャットモデル）を実装して Green に
-  - [ ] 2-7 評価シナリオのステップ定義を実装し、実LLMで初回スコアを記録
+  - [x] 2-1 システムプロンプト v1 / 2-2 LangGraph 1ターングラフ（agent⇄tools→finalize）/ 2-3 turn CLI（`uv run vmgs turn --dry-run`）
+  - [x] 2-6 グラフ制御のステップ定義（ScriptedChatModel）で Green（全76テスト緑）
+  - [ ] 2-4/2-5/2-7 実LLMでの観察・評価シナリオのステップ定義・初回スコア記録（要: .env に APIキー）
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 

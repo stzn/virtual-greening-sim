@@ -447,3 +447,13 @@ LLM 判断品質（`evals/features/rain.feature`）:
 - `tools/` の実装は `World` を呼ぶだけ → 実機版は `RobotAdapter`（ROS 2 / MQTT / REST）を同じインターフェースで実装すれば差し替え可能。
 - `WeatherProvider` を抽象化しておけば、気象庁データや PLATEAU 由来の日影・地表温度データにも差し替えられる。
 - フェイルセーフ（`STRANDED` 等）を状態として明示しておくことが、実機での通信断・ハード障害時の状態遷移設計の雛形になる。
+
+---
+
+## 付録: フェーズ2 実装メモ
+
+- グラフ: `agent ⇄ tools → finalize`（`src/vmgs/agent/graph.py`）。上限 8 回で打ち切り、LLM 例外は `TurnDecision.failed` として記録しターンは落とさない。
+- 最終回答は JSON（`action_summary / rationale / risk_notes`）。JSON でなければ本文を要約として扱う（追加のLLM呼び出しなし）。
+- 会話はターンごとにリセットし、直近3ターンの判断要約のみ持ち越す（`AgentRunner.history`）。
+- `ScriptedChatModel`（`agent/fake.py`）でグラフ制御を決定論的にテスト。`vmgs turn --dry-run` で APIキーなしの動作確認ができる。
+- 未実施: 実LLMでの観察（2-4/2-5）と評価シナリオのステップ定義（2-7）。APIキー（`.env`）が必要。

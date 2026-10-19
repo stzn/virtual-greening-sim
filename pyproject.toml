@@ -20,6 +20,9 @@ dependencies = [
     "python-dotenv>=1.2.4",
 ]
 
+[project.scripts]
+vmgs = "vmgs.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

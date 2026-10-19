@@ -11,4 +11,4 @@ LLM エージェントが「植物の健康維持」と「都市の暑熱緩和�
 Python 3.11+ / uv / pytest-bdd（BDD） / LangGraph / Pydantic / Open-Meteo API / LangSmith / OpenAI or Anthropic API
 
 ## ステータス
-フェーズ1（仮想環境とツール）完了。次はフェーズ2（最小 Agent Loop）
+フェーズ2（最小 Agent Loop）のグラフ制御まで完了。実LLMでの評価（2-7）は APIキー設定後
