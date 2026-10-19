@@ -12,7 +12,9 @@
   - [x] 2-0b 評価シナリオ（evals/features 4本8件・Red確認済み。実行: `uv run pytest evals -m eval`）
   - [x] 2-1 システムプロンプト v1 / 2-2 LangGraph 1ターングラフ（agent⇄tools→finalize）/ 2-3 turn CLI（`uv run vmgs turn --dry-run`）
   - [x] 2-6 グラフ制御のステップ定義（ScriptedChatModel）で Green（全76テスト緑）
-  - [ ] 2-4/2-5/2-7 実LLMでの観察・評価シナリオのステップ定義・初回スコア記録（要: .env に APIキー）
+  - [x] 2-7 評価シナリオのステップ定義・スコア記録（runs/evals/*.json）。`EVAL_FAKE=1` で配線のスモーク確認済み
+  - [x] Ollama（ローカルのオープンウェイト）プロバイダ対応、`vmgs turn --provider/--model`
+  - [ ] 2-4/2-5 実LLMでの観察と、評価シナリオの初回スコア記録（要: APIキー設定 または Ollama 起動+モデル取得）
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 

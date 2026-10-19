@@ -48,7 +48,12 @@ def cmd_turn(args: argparse.Namespace) -> int:
     )
     world.plant.moisture = args.moisture
     try:
-        model = _dry_run_model() if args.dry_run else make_chat_model(Settings())
+        overrides: dict[str, str] = {}
+        if args.provider:
+            overrides["llm_provider"] = args.provider
+        if args.model:
+            overrides["llm_model"] = args.model
+        model = _dry_run_model() if args.dry_run else make_chat_model(Settings(**overrides))  # type: ignore[arg-type]
     except MissingApiKeyError as e:
         print(f"エラー: {e}\n（--dry-run なら APIキーなしで動作確認できます）", file=sys.stderr)
         return 2
@@ -78,6 +83,10 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--hour", type=int, default=13)
     t.add_argument("--spot", default="C", choices=["A", "B", "C"])
     t.add_argument("--moisture", type=float, default=30.0)
+    t.add_argument(
+        "--provider", choices=["openai", "anthropic", "ollama"], help="LLM_PROVIDER を上書き"
+    )
+    t.add_argument("--model", help="LLM_MODEL を上書き（例: qwen3:14b）")
     t.add_argument("--dry-run", action="store_true", help="Fake LLM で実行（APIキー不要）")
     t.set_defaults(func=cmd_turn)
     args = parser.parse_args(argv)

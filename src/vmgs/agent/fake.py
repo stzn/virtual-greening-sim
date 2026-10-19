@@ -19,6 +19,7 @@ class ScriptedChatModel(BaseChatModel):
 
     responses: list[AIMessage]
     repeat_last: bool = False
+    cycle: bool = False  # True なら応答列を先頭から繰り返す（評価のスモークテスト用）
     fail: bool = False
     _index: int = PrivateAttr(default=0)
     _inputs: list[list[BaseMessage]] = PrivateAttr(default_factory=list)
@@ -45,7 +46,7 @@ class ScriptedChatModel(BaseChatModel):
         self._inputs.append(list(messages))
         if self.fail:
             raise RuntimeError("scripted LLM failure")
-        i = self._index
+        i = self._index % len(self.responses) if self.cycle and self.responses else self._index
         if i >= len(self.responses):
             if not self.repeat_last:
                 raise RuntimeError("ScriptedChatModel: 用意した応答を使い切りました")
@@ -55,7 +56,7 @@ class ScriptedChatModel(BaseChatModel):
         # 毎回コピーして id を外し、繰り返し時は tool_call の id も変える
         update: dict[str, Any] = {"id": None}
         base = self.responses[i]
-        if base.tool_calls and self._index > len(self.responses):
+        if base.tool_calls and self._index > len(self.responses) and not self.cycle:
             update["tool_calls"] = [
                 {**tc, "id": f"{tc['id']}_{self._index}"} for tc in base.tool_calls
             ]

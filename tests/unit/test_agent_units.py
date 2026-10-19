@@ -39,3 +39,9 @@ def test_APIキーが無ければ明確なエラー(provider: str) -> None:
     settings = Settings(_env_file=None, llm_provider=provider)  # type: ignore[call-arg, arg-type]
     with pytest.raises(MissingApiKeyError):
         make_chat_model(settings)
+
+
+def test_ollamaはAPIキー無しでモデルを作れる() -> None:
+    settings = Settings(_env_file=None, llm_provider="ollama", llm_model="qwen3:14b")  # type: ignore[call-arg]
+    model = make_chat_model(settings)
+    assert type(model).__name__ == "ChatOllama"

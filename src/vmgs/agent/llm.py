@@ -1,4 +1,4 @@
-"""設定からチャットモデルを作る。プロバイダはOpenAI / Anthropicを設定だけで切り替える。"""
+"""設定からチャットモデルを作る。OpenAI / Anthropic / Ollama（ローカルのオープンウェイト）を切り替える。"""
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import SecretStr
@@ -11,6 +11,12 @@ class MissingApiKeyError(Exception):
 
 
 def make_chat_model(settings: Settings) -> BaseChatModel:
+    if settings.llm_provider == "ollama":
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=settings.llm_model, temperature=0, base_url=settings.ollama_base_url
+        )
     if settings.llm_provider == "openai":
         if not settings.openai_api_key:
             raise MissingApiKeyError("OPENAI_API_KEY が未設定です（.env に設定してください）")
