@@ -11,7 +11,7 @@ from vmgs.agent.graph import (
     TurnDecision,
     build_turn_graph,
 )
-from vmgs.agent.prompts import SYSTEM_PROMPT_V1, TurnSummary, build_turn_input
+from vmgs.agent.prompts import SYSTEM_PROMPT, TurnSummary, build_turn_input
 from vmgs.tools.tools import ToolBox
 from vmgs.world.world import World
 
@@ -32,7 +32,7 @@ class AgentRunner:
         model: BaseChatModel,
         world: World,
         *,
-        system_prompt: str = SYSTEM_PROMPT_V1,
+        system_prompt: str = SYSTEM_PROMPT,
         max_tool_calls: int = MAX_TOOL_CALLS_PER_TURN,
         history_turns: int = 3,
     ) -> None:

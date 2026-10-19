@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -34,6 +34,31 @@ SYSTEM_PROMPT_V1 = """\
 次のJSONだけを返す（前後に文章を付けない）:
 {"action_summary": "行動の要約（短く）", "rationale": "判断理由", "risk_notes": "懸念・次ターンへの注意"}
 """
+
+
+# v2: v1 ではモデルがツールを呼ばず、最初の返答で最終回答JSONを返してしまった（評価で 0/5）。
+# 「ツールを呼ぶこと」「最終回答は行動の実行後にだけ返すこと」を明示して修正。
+SYSTEM_PROMPT_V2 = SYSTEM_PROMPT_V1.replace(
+    "## 進め方（1ターン = 仮想時間の1時間）\n"
+    "1. get_plant_state で状態を確認する。必要なら get_weather で現在と今後の天気を確認する。\n"
+    "2. 状況に応じて、移動（move_to_spot）・散水（irrigate）・現状維持のいずれかを選ぶ。\n"
+    "3. 行動の理由や気づきは、重要なときだけ log_research_note に残す。\n"
+    "4. 行動が決まったら、これ以上ツールを呼ばずに最終回答を返す。\n",
+    "## 進め方（1ターン = 仮想時間の1時間）\n"
+    "あなたは文章で答える前に、まずツールを呼び出して世界を確認・操作する。\n"
+    "1. 最初に必ず get_plant_state ツールを呼び出す（状態を推測しない）。\n"
+    "2. 必要なら get_weather ツールで現在と今後の天気（特に降水確率）を確認する。\n"
+    "3. 状況に応じて、move_to_spot（移動）・irrigate（散水）のツールを実際に呼び出す。"
+    "何もしないのが最善なら、行動ツールは呼ばない。\n"
+    "4. 行動の理由や気づきは、重要なときだけ log_research_note ツールに残す。\n"
+    "5. 必要なツール呼び出しがすべて終わった後で、はじめて最終回答を返す。"
+    "最終回答では、実際に実行した行動と結果を要約する（これから行う予定を書かない）。\n",
+).replace(
+    "## 最終回答の形式\n次のJSONだけを返す",
+    "## 最終回答の形式（すべてのツール呼び出しが終わった後にだけ返す）\n次のJSONだけを返す",
+)
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_V2
 
 
 class TurnSummary(BaseModel):

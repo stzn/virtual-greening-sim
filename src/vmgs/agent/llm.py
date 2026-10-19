@@ -15,7 +15,10 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
         from langchain_ollama import ChatOllama
 
         return ChatOllama(
-            model=settings.llm_model, temperature=0, base_url=settings.ollama_base_url
+            model=settings.llm_model,
+            temperature=0,
+            base_url=settings.ollama_base_url,
+            reasoning=settings.ollama_reasoning,
         )
     if settings.llm_provider == "openai":
         if not settings.openai_api_key:
