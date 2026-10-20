@@ -50,7 +50,17 @@ def test_ollamaはAPIキー無しでモデルを作れる() -> None:
 def test_プロンプトv7は移動予算の読み方を含み_v6から変わっている() -> None:
     from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS
 
-    assert PROMPT_VERSION == "v7"
+    assert PROMPT_VERSION in PROMPTS
     assert "move_budget_remaining" in PROMPTS["v7"]
     assert "move_budget_remaining" not in PROMPTS["v6"]
     assert PROMPTS["v7"].startswith(PROMPTS["v6"].split("## 最終回答の形式")[0].rstrip()[:200])
+
+
+def test_プロンプトv8は移動予算をチェックリストの条件に含む() -> None:
+    from vmgs.agent.prompts import PROMPTS
+
+    row2 = next(line for line in PROMPTS["v8"].splitlines() if line.startswith("| 2 |"))
+    assert "move_budget_remaining が 1 以上" in row2
+    assert "move_budget_remaining が 1 以上" not in next(
+        line for line in PROMPTS["v7"].splitlines() if line.startswith("| 2 |")
+    )

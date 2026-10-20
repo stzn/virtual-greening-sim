@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-PROMPT_VERSION = "v7"
+PROMPT_VERSION = "v8"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -156,7 +156,17 @@ SYSTEM_PROMPT_V7 = SYSTEM_PROMPT_V6.replace(
     "## 最終回答の形式（すべてのツール呼び出しが終わった後にだけ返す）",
 )
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V7
+# v8: v7 は予算を文章で説明したが、評価シナリオ「予算0で移動を試みない」は 0/5 のままだった（v6 と同じ）。
+# このモデルは文章よりチェックリストの条件欄に従うため、移動予算を #2 の条件に組み込む。
+_ROW2_OLD = "かつ バッテリー 15% 以上 | B へ move_to_spot する（すでに B にいるなら #3 へ） |"
+assert _ROW2_OLD in SYSTEM_PROMPT_V7
+SYSTEM_PROMPT_V8 = SYSTEM_PROMPT_V7.replace(
+    _ROW2_OLD,
+    "かつ バッテリー 15% 以上、かつ **move_budget_remaining が 1 以上** "
+    "| B へ move_to_spot する（すでに B にいる、または move_budget_remaining が 0 なら移動せず #3 へ） |",
+)
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_V8
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
@@ -165,6 +175,7 @@ PROMPTS: dict[str, str] = {
     "v5": SYSTEM_PROMPT_V5,
     "v6": SYSTEM_PROMPT_V6,
     "v7": SYSTEM_PROMPT_V7,
+    "v8": SYSTEM_PROMPT_V8,
 }
 
 
