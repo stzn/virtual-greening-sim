@@ -39,6 +39,10 @@
     かつ get_plant_state を呼ぶ
     ならば 結果の直前の移動は "C" から "B" へ 0時間前 である
 
+  シナリオ: get_plant_state は直近の移動回数と残りの移動予算を返す
+    もし get_plant_state を呼ぶ
+    ならば 結果に 直近の移動回数・残りの移動予算 が含まれる
+
   # --- move_to_spot ---
   シナリオ: move_to_spot は成功時に消費バッテリーと新スポットを返す
     もし move_to_spot を spot_id="B" で呼ぶ
@@ -55,6 +59,11 @@
     もし move_to_spot を spot_id="B" で呼ぶ
     かつ move_to_spot を spot_id="C" で呼ぶ
     ならば ツールはエラー "RECENT_REVERSAL" を返す
+
+  シナリオ: 移動予算を使い切った移動はツールのエラーとして返る
+    前提 3時間前と 7時間前に移動している
+    もし move_to_spot を spot_id="B" で呼ぶ
+    ならば ツールはエラー "MOVE_BUDGET_EXCEEDED" を返す
 
   シナリオ: 同一スポットへの移動はエラーになる
     もし move_to_spot を spot_id="C" で呼ぶ
