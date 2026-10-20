@@ -30,6 +30,15 @@
     もし get_plant_state を2回呼ぶ
     ならば 2回の結果は同一である
 
+  シナリオ: get_plant_state は直前の移動を返す（移動が無ければ null）
+    もし get_plant_state を呼ぶ
+    ならば 結果の直前の移動は無い
+
+  シナリオ: 移動後の get_plant_state に直前の移動が含まれる
+    もし move_to_spot を spot_id="B" で呼ぶ
+    かつ get_plant_state を呼ぶ
+    ならば 結果の直前の移動は "C" から "B" へ 0時間前 である
+
   # --- move_to_spot ---
   シナリオ: move_to_spot は成功時に消費バッテリーと新スポットを返す
     もし move_to_spot を spot_id="B" で呼ぶ
@@ -41,6 +50,11 @@
     もし move_to_spot を spot_id="Z" で呼ぶ
     ならば ツールはエラー "VALIDATION_ERROR" を返す
     かつ 現在のスポットは "C" のままである
+
+  シナリオ: 直前の移動元へ戻る移動はツールのエラーとして返る
+    もし move_to_spot を spot_id="B" で呼ぶ
+    かつ move_to_spot を spot_id="C" で呼ぶ
+    ならば ツールはエラー "RECENT_REVERSAL" を返す
 
   シナリオ: 同一スポットへの移動はエラーになる
     もし move_to_spot を spot_id="C" で呼ぶ

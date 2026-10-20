@@ -13,6 +13,7 @@ from vmgs.agent.runner import AgentRunner, TurnResult
 from vmgs.weather.models import WeatherRecord
 from vmgs.weather.providers import SeriesWeather
 from vmgs.world.clock import SimClock
+from vmgs.world.plant import LastMove
 from vmgs.world.world import World
 
 EVAL_START = datetime(2025, 8, 1, 13, 0)
@@ -40,6 +41,7 @@ class TrialSetup:
     base_precip_prob_pct: float = 5.0
     forecast: list[ForecastPoint] = field(default_factory=list)
     history: list[TurnSummary] = field(default_factory=list)
+    last_move: tuple[str, str, int] | None = None  # (移動元, 移動先, 何時間前)
 
 
 def build_weather(setup: TrialSetup, hours: int = 24) -> SeriesWeather:
@@ -74,6 +76,9 @@ def build_world(setup: TrialSetup) -> World:
     world.plant.moisture = setup.moisture
     world.plant.water_tank_ml = setup.tank_ml
     world.plant.battery_pct = setup.battery_pct
+    if setup.last_move is not None:
+        src, dst, hours_ago = setup.last_move
+        world.plant.last_move = LastMove(src, dst, EVAL_START - timedelta(hours=hours_ago))
     return world
 
 
@@ -114,6 +119,13 @@ def moved_to(spot: str) -> Predicate:
 def not_moved_to(spot: str) -> Predicate:
     inner = moved_to(spot)
     return lambda r: not inner(r)
+
+
+def not_attempted_move_to(spot: str) -> Predicate:
+    """移動の成否によらず、そのスポットへの移動をそもそも試みなかった（LLM自身の判断を測る）。"""
+    return lambda r: (
+        not any(c.name == "move_to_spot" and c.args.get("spot_id") == spot for c in r.tool_calls)
+    )
 
 
 def any_of(*preds: Predicate) -> Predicate:

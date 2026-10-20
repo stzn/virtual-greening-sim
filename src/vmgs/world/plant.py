@@ -1,6 +1,7 @@
 """植物ユニットの状態と生理モデル。"""
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 from vmgs.weather.models import WeatherRecord
@@ -14,6 +15,15 @@ class UnitStatus(StrEnum):
     DEAD = "DEAD"  # 枯死
 
 
+@dataclass(frozen=True)
+class LastMove:
+    """直前の移動（往復の検出と、LLMへの観測に使う）。"""
+
+    from_spot: str
+    to_spot: str
+    at: datetime
+
+
 @dataclass
 class PlantUnit:
     spot_id: str = "A"
@@ -23,6 +33,7 @@ class PlantUnit:
     battery_pct: float = 100.0
     status: UnitStatus = UnitStatus.ACTIVE
     heat_mitigation_score: float = 0.0
+    last_move: LastMove | None = None
 
 
 def clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:

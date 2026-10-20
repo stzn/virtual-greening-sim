@@ -32,6 +32,10 @@ class Params:
     move_dist_min_m: float = 150.0
     move_dist_max_m: float = 300.0
 
+    # 往復移動の抑制
+    reversal_cooldown_hours: int = 2  # 直前の移動元へ戻れない時間
+    reversal_emergency_health: float = 50.0  # 健康度がこれ未満なら緊急として往復を許可
+
     # 暑熱緩和
     cooling_per_ml: float = 0.004  # 散水1mlあたりの冷却 [℃]
     cooling_cap_c: float = 3.0

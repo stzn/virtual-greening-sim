@@ -79,3 +79,15 @@ def test_run_trials_は試行ごとに独立し成功回数を数える() -> Non
 def test_LLM失敗の試行は成功に数えない() -> None:
     failed = TurnResult(decision=TurnDecision(failed=True, error="x"), tool_calls=[], messages=[])
     assert success_count([failed], [not_called("irrigate")]) == 0
+
+
+def test_build_world_は直前の移動を反映し_試みない述語は失敗した試行も検出する() -> None:
+    from vmgs.eval.trials import not_attempted_move_to
+
+    w = build_world(TrialSetup(spot="B", last_move=("A", "B", 1)))
+    last = w.state().last_move
+    assert last is not None
+    assert (last.from_spot, last.hours_ago) == ("A", 1)
+    refused = _result(("move_to_spot", {"spot_id": "A"}, False))
+    assert not moved_to("A")(refused)  # 実際には移動していない
+    assert not not_attempted_move_to("A")(refused)  # だが試みた

@@ -23,6 +23,7 @@ from vmgs.eval.trials import (
     checked_state_before_acting,
     irrigation_within_tank,
     moved_to,
+    not_attempted_move_to,
     not_called,
     not_moved_to,
     run_trials,
@@ -84,6 +85,11 @@ def _g_weather(ec: EvalCtx, t: float, r: float) -> None:
     ec.setup.temperature_c, ec.setup.shortwave_w_m2 = float(t), float(r)
 
 
+@given(parsers.parse('{n:d}時間前に "{a}" から "{b}" へ移動している'))
+def _g_last_move(ec: EvalCtx, n: int, a: str, b: str) -> None:
+    ec.setup.last_move = (a, b, n)
+
+
 @given("前のターンの判断要約が次のとおり1件ある")
 def _g_history(ec: EvalCtx, datatable: list[list[str]]) -> None:
     ec.setup.history = [
@@ -122,6 +128,11 @@ def _t_not_moved(ec: EvalCtx, spot: str) -> None:
 @then(parsers.parse('move_to_spot で "{spot}" へ移動するか irrigate が呼ばれる'))
 def _t_move_or_irrigate(ec: EvalCtx, spot: str) -> None:
     ec.predicates.append(any_of(moved_to(spot), called("irrigate")))
+
+
+@then(parsers.parse('move_to_spot で "{spot}" への移動を試みない'))
+def _t_not_attempted(ec: EvalCtx, spot: str) -> None:
+    ec.predicates.append(not_attempted_move_to(spot))
 
 
 @then("副作用のあるツールの前に get_plant_state が呼ばれている")

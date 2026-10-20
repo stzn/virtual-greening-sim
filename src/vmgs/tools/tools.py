@@ -74,7 +74,7 @@ class ToolBox:
                 "move_to_spot",
                 "ユニットを別スポット（A:芝生広場 / B:ビルの谷間 / C:アスファルト歩道）へ移動する。"
                 "距離に応じてバッテリーを5〜10%消費する。すでにいるスポットへは移動できない。"
-                "必要がない限り往復移動は避ける。",
+                "直前の移動元へ短時間（2時間以内）で戻る往復は拒否される（健康度が低い緊急時を除く）。",
                 MoveToSpotArgs,
                 self._move_to_spot,
             ),
@@ -138,6 +138,15 @@ class ToolBox:
             "battery_pct": _r(s.battery_pct),
             "status": s.status,
             "heat_mitigation_score": _r(s.heat_mitigation_score),
+            "last_move": (
+                {
+                    "from": s.last_move.from_spot,
+                    "to": s.last_move.to_spot,
+                    "hours_ago": s.last_move.hours_ago,
+                }
+                if s.last_move
+                else None
+            ),
         }
 
     def _move_to_spot(self, a: MoveToSpotArgs) -> dict[str, Any]:

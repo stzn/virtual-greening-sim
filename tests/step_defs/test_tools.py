@@ -98,6 +98,17 @@ def _same(ctx: Ctx) -> None:
     assert ctx.results[0] == ctx.results[1]
 
 
+@then("結果の直前の移動は無い")
+def _no_last_move(ctx: Ctx) -> None:
+    assert "last_move" in ctx.result
+    assert ctx.result["last_move"] is None
+
+
+@then(parsers.parse('結果の直前の移動は "{a}" から "{b}" へ {n:d}時間前 である'))
+def _last_move(ctx: Ctx, a: str, b: str, n: int) -> None:
+    assert ctx.result["last_move"] == {"from": a, "to": b, "hours_ago": n}
+
+
 @then("結果は成功である")
 def _ok(ctx: Ctx) -> None:
     assert ctx.result["ok"] is True, ctx.result

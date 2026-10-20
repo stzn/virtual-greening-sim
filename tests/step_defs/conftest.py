@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +12,7 @@ from pytest_bdd import given, parsers, then, when
 from vmgs.tools.tools import ToolBox
 from vmgs.weather.providers import ConstantWeather
 from vmgs.world.clock import SimClock
-from vmgs.world.plant import UnitStatus
+from vmgs.world.plant import LastMove, UnitStatus
 from vmgs.world.spots import SPOTS
 from vmgs.world.world import World, WorldError
 
@@ -117,6 +117,17 @@ def _g_battery(ctx: Ctx, v: float) -> None:
     ctx.world.plant.battery_pct = float(v)
 
 
+@given(parsers.parse('{n:d}時間前に "{a}" から "{b}" へ移動している'))
+def _g_last_move(ctx: Ctx, n: int, a: str, b: str) -> None:
+    now = ctx.world.clock.now
+    ctx.world.plant.last_move = LastMove(a, b, now - timedelta(hours=n))
+
+
+@given("直前の移動の記録が無い")
+def _g_no_last_move(ctx: Ctx) -> None:
+    ctx.world.plant.last_move = None
+
+
 @given("ユニットが枯死している")
 def _g_dead(ctx: Ctx) -> None:
     ctx.world.plant.status = UnitStatus.DEAD
@@ -138,9 +149,9 @@ def _g_weather(ctx: Ctx, t: str, r: str, u: str | None, h: str | None, p: str | 
 
 
 # ---------------- When（world） ----------------
-@when("1時間経過する")
-def _w_advance(ctx: Ctx) -> None:
-    ctx.act(lambda: ctx.world.advance(1))
+@when(parsers.parse("{n:d}時間経過する"))
+def _w_advance(ctx: Ctx, n: int) -> None:
+    ctx.act(lambda: ctx.world.advance(n))
 
 
 @when(parsers.parse("仮想時刻を 1時間進める"))
@@ -218,6 +229,19 @@ def _t_status(ctx: Ctx, s: str) -> None:
 @then(parsers.re(r"水タンク残量[はが] (?P<n>\d+)ml である"), converters={"n": int})
 def _t_tank(ctx: Ctx, n: int) -> None:
     assert ctx.world.plant.water_tank_ml == n
+
+
+@then(parsers.parse("バッテリー残量は {v:g}% である"))
+def _t_battery_eq(ctx: Ctx, v: float) -> None:
+    assert ctx.world.plant.battery_pct == pytest.approx(v, abs=0.01)
+
+
+@then("エラーに あと何時間後から戻れるか が含まれる")
+def _t_retry_after(ctx: Ctx) -> None:
+    assert ctx.error is not None
+    retry = ctx.error.details["retry_after_hours"]
+    assert isinstance(retry, int)
+    assert retry >= 1
 
 
 @then(parsers.parse("バッテリー残量は {v:g}% より大きい"))

@@ -15,7 +15,7 @@
   - [x] 2-7 評価シナリオのステップ定義・スコア記録（runs/evals/*.json）。`EVAL_FAKE=1` で配線のスモーク確認済み
   - [x] Ollama（ローカルのオープンウェイト）プロバイダ対応、`vmgs turn --provider/--model`
   - [x] 2-4/2-5 実LLM(qwen3:14b)での観察と初回スコア記録 → docs/eval-results.md（v1: ツール呼ばず / v2: ツールは呼ぶが状況に応じた判断になっていない）
-  - [x] プロンプト v3〜v5: 判断ルール明示で 5/8 → 7/8（docs/eval-results.md）。残: 往復移動の抑制（loop_guard）
+  - [x] プロンプト v3〜v5: 判断ルール明示で 5/8 → 7/8（docs/eval-results.md）。往復移動は世界側ガード+last_move観測で対策済み（v6、docs/eval-results.md）。履歴が文章のみのシナリオは0/5のまま（既知）
   - [ ] 評価の試行にばらつきを導入（temperature=0 で5回が同一トレースになっている）
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
 - [ ] フェーズ4: 可観測性とプロンプト最適化

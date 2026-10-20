@@ -9,7 +9,14 @@ from vmgs.weather.models import WeatherRecord
 from vmgs.weather.providers import WeatherProvider
 from vmgs.world.clock import SimClock
 from vmgs.world.params import Params
-from vmgs.world.plant import PlantUnit, UnitStatus, clamp, evapotranspiration, health_delta
+from vmgs.world.plant import (
+    LastMove,
+    PlantUnit,
+    UnitStatus,
+    clamp,
+    evapotranspiration,
+    health_delta,
+)
 from vmgs.world.spots import SPOTS, Spot, move_cost_pct
 
 
@@ -23,6 +30,12 @@ class WorldError(Exception):
         self.details = details
 
 
+class LastMoveInfo(BaseModel):
+    from_spot: str
+    to_spot: str
+    hours_ago: int
+
+
 class PlantState(BaseModel):
     sim_time: datetime
     spot_id: str
@@ -33,6 +46,7 @@ class PlantState(BaseModel):
     battery_pct: float
     status: str
     heat_mitigation_score: float
+    last_move: LastMoveInfo | None = None
 
 
 class MoveResult(BaseModel):
@@ -82,6 +96,7 @@ class World:
 
     def state(self) -> PlantState:
         p = self.plant
+        last = p.last_move
         return PlantState(
             sim_time=self.clock.now,
             spot_id=p.spot_id,
@@ -92,7 +107,19 @@ class World:
             battery_pct=p.battery_pct,
             status=p.status.value,
             heat_mitigation_score=p.heat_mitigation_score,
+            last_move=(
+                LastMoveInfo(
+                    from_spot=last.from_spot,
+                    to_spot=last.to_spot,
+                    hours_ago=self._hours_since(last.at),
+                )
+                if last
+                else None
+            ),
         )
+
+    def _hours_since(self, t: datetime) -> int:
+        return int((self.clock.now - t).total_seconds() // 3600)
 
     # --- 時間経過 ---
     def advance(self, hours: int = 1) -> None:
@@ -133,6 +160,7 @@ class World:
             raise WorldError("UNKNOWN_SPOT", f"スポット {spot_id!r} は存在しません")
         if spot_id == p.spot_id:
             raise WorldError("ALREADY_AT_SPOT", f"すでにスポット {spot_id} にいます")
+        self._guard_reversal(spot_id)
         cost = move_cost_pct(p.spot_id, spot_id, self.params)
         if p.battery_pct < cost:
             raise WorldError(
@@ -142,8 +170,29 @@ class World:
                 battery_pct=p.battery_pct,
             )
         p.battery_pct -= cost
+        p.last_move = LastMove(from_spot=p.spot_id, to_spot=spot_id, at=self.clock.now)
         p.spot_id = spot_id
         return MoveResult(new_spot_id=spot_id, battery_used_pct=cost, battery_pct=p.battery_pct)
+
+    def _guard_reversal(self, target: str) -> None:
+        """直前の移動元へ短時間で戻る往復を拒否する（健康度が低い緊急時は許可）。"""
+        p, params = self.plant, self.params
+        last = p.last_move
+        if last is None or target != last.from_spot:
+            return
+        if p.health < params.reversal_emergency_health:
+            return
+        since = self._hours_since(last.at)
+        if since < params.reversal_cooldown_hours:
+            raise WorldError(
+                "RECENT_REVERSAL",
+                f"{since}時間前に {last.from_spot}→{last.to_spot} へ移動したばかりです。"
+                f"往復はバッテリーの無駄なので、あと {params.reversal_cooldown_hours - since} 時間は"
+                f" {target} へ戻れません",
+                retry_after_hours=params.reversal_cooldown_hours - since,
+                last_move_from=last.from_spot,
+                last_move_to=last.to_spot,
+            )
 
     def irrigate(self, amount_ml: int) -> IrrigateResult:
         self._require_alive()

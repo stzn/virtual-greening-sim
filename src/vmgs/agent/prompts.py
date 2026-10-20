@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-PROMPT_VERSION = "v5"
+PROMPT_VERSION = "v6"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -134,13 +134,25 @@ SYSTEM_PROMPT_V5 = SYSTEM_PROMPT_V4.replace(
     "irrigate する。量は「1000ml」と「水タンク残量」の**小さい方**（例: 残量 120ml なら 120ml。1000ml で約 +20%）",
 )
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V5
+# v6: v5 の残課題は往復移動（直前に A→B へ退避した直後に A へ戻る）。構造側の対策として、
+# World が往復を拒否し（RECENT_REVERSAL）、get_plant_state が last_move を返すようにした。
+# プロンプトは last_move の読み方と往復禁止を明記する。
+SYSTEM_PROMPT_V6 = SYSTEM_PROMPT_V5.replace(
+    "- 直前のターンで移動した場合、理由なくすぐ元のスポットへ戻らない（往復はバッテリーの無駄）。\n",
+    "- get_plant_state の last_move に直前の移動（from → to, hours_ago）が入っている。"
+    "hours_ago が 2 未満のとき、その from のスポットへ戻る move_to_spot は呼ばない"
+    "（呼んでも RECENT_REVERSAL で拒否される。健康度が 50 未満の緊急時を除く）。"
+    "判断メモで last_move を確認する。\n",
+)
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_V6
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
     "v3": SYSTEM_PROMPT_V3,
     "v4": SYSTEM_PROMPT_V4,
     "v5": SYSTEM_PROMPT_V5,
+    "v6": SYSTEM_PROMPT_V6,
 }
 
 
