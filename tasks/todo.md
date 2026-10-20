@@ -18,6 +18,9 @@
   - [x] プロンプト v3〜v5: 判断ルール明示で 5/8 → 7/8（docs/eval-results.md）。往復移動は世界側ガード+last_move観測で対策済み（v6、docs/eval-results.md）。履歴が文章のみのシナリオは0/5のまま（既知）
   - [ ] 評価の試行にばらつきを導入（temperature=0 で5回が同一トレースになっている）
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
+  - [x] 3-0 feature（sim/simulation 10件・checkpoint 5件・metrics 6件、agent/baseline 7件＝計28件、Red確認済み）
+  - [ ] 3-1 24hループ+CLI / 3-2 ターン間記憶 / 3-3 チェックポイントと再開 / 3-4 ログ(steps.jsonl・research_notes.md)
+  - [ ] 3-5 トレードオフシナリオ / 3-6 ベースライン比較 / 3-7 結果グラフ
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 
 ## 開発ルール（BDD）
