@@ -45,3 +45,12 @@ def test_ollamaはAPIキー無しでモデルを作れる() -> None:
     settings = Settings(_env_file=None, llm_provider="ollama", llm_model="qwen3:14b")  # type: ignore[call-arg]
     model = make_chat_model(settings)
     assert type(model).__name__ == "ChatOllama"
+
+
+def test_プロンプトv7は移動予算の読み方を含み_v6から変わっている() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS
+
+    assert PROMPT_VERSION == "v7"
+    assert "move_budget_remaining" in PROMPTS["v7"]
+    assert "move_budget_remaining" not in PROMPTS["v6"]
+    assert PROMPTS["v7"].startswith(PROMPTS["v6"].split("## 最終回答の形式")[0].rstrip()[:200])

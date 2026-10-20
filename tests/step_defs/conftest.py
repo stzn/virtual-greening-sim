@@ -33,6 +33,8 @@ KEY_MAP = {
     "バッテリー残量": "battery_pct",
     "ステータス": "status",
     "冷却効果": "cooling_c",
+    "直近の移動回数": "moves_in_window",
+    "残りの移動予算": "move_budget_remaining",
 }
 
 
@@ -120,7 +122,21 @@ def _g_battery(ctx: Ctx, v: float) -> None:
 @given(parsers.parse('{n:d}時間前に "{a}" から "{b}" へ移動している'))
 def _g_last_move(ctx: Ctx, n: int, a: str, b: str) -> None:
     now = ctx.world.clock.now
-    ctx.world.plant.last_move = LastMove(a, b, now - timedelta(hours=n))
+    when = now - timedelta(hours=n)
+    ctx.world.plant.last_move = LastMove(a, b, when)
+    ctx.world.plant.move_times.append(when)
+
+
+@given(parsers.parse("{a:d}時間前と {b:d}時間前に移動している"))
+def _g_move_times(ctx: Ctx, a: int, b: int) -> None:
+    now = ctx.world.clock.now
+    ctx.world.plant.move_times = [now - timedelta(hours=a), now - timedelta(hours=b)]
+
+
+@given("直近の移動は無い")
+def _g_no_recent_moves(ctx: Ctx) -> None:
+    ctx.world.plant.move_times = []
+    ctx.world.plant.last_move = None
 
 
 @given("直前の移動の記録が無い")
@@ -234,6 +250,22 @@ def _t_tank(ctx: Ctx, n: int) -> None:
 @then(parsers.parse("バッテリー残量は {v:g}% である"))
 def _t_battery_eq(ctx: Ctx, v: float) -> None:
     assert ctx.world.plant.battery_pct == pytest.approx(v, abs=0.01)
+
+
+@then(parsers.parse("移動できるようになるまで {n:d} 時間である"))
+def _t_budget_retry(ctx: Ctx, n: int) -> None:
+    assert ctx.error is not None
+    assert ctx.error.details["retry_after_hours"] == n
+
+
+@then(parsers.parse("直近の移動回数は {n:d} 回である"))
+def _t_moves_in_window(ctx: Ctx, n: int) -> None:
+    assert ctx.world.state().moves_in_window == n
+
+
+@then(parsers.parse("残りの移動予算は {n:d} 回である"))
+def _t_budget_remaining(ctx: Ctx, n: int) -> None:
+    assert ctx.world.state().move_budget_remaining == n
 
 
 @then("エラーに あと何時間後から戻れるか が含まれる")

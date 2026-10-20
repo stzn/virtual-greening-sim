@@ -34,7 +34,10 @@ class Params:
 
     # 往復移動の抑制
     reversal_cooldown_hours: int = 2  # 直前の移動元へ戻れない時間
-    reversal_emergency_health: float = 50.0  # 健康度がこれ未満なら緊急として往復を許可
+    reversal_emergency_health: float = 50.0  # 健康度がこれ未満なら緊急として往復・移動予算を免除
+    # 移動予算: 直近 window 時間に移動できるのは max 回まで（A↔B のピンポンを抑える）
+    move_budget_max: int = 2
+    move_budget_window_hours: int = 12
 
     # 暑熱緩和
     cooling_per_ml: float = 0.004  # 散水1mlあたりの冷却 [℃]

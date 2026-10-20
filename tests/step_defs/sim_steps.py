@@ -10,7 +10,7 @@ import pytest
 from pytest_bdd import given, parsers, then, when
 
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
-from vmgs.agent.graph import TurnDecision
+from vmgs.agent.graph import ToolCallRecord, TurnDecision
 from vmgs.agent.protocol import AgentFactory
 from vmgs.agent.runner import TurnResult
 from vmgs.eval.metrics import (
@@ -29,6 +29,7 @@ from vmgs.sim.simulate import (
     run_simulation,
 )
 from vmgs.sim.store import RunStore
+from vmgs.tools.tools import ToolBox
 from vmgs.weather.cache import load_records
 from vmgs.weather.providers import ConstantWeather, SeriesWeather
 from vmgs.world.world import World
@@ -124,6 +125,30 @@ def _failing_at(step_hour: int) -> AgentFactory:
     return Failing
 
 
+def _pingpong(world_holder: list[World]) -> AgentFactory:
+    """毎時、いまいない方（A か B）へ移動しようとする。往復・予算ガードの回帰用。"""
+
+    class PingPong(NoopAgent):
+        def __init__(self, world: World) -> None:
+            super().__init__(world)
+            self.world = world
+            self.toolbox = ToolBox(world)
+            world_holder.append(world)
+
+        def run_turn(self) -> TurnResult:
+            target = "B" if self.world.plant.spot_id != "B" else "A"
+            result = self.toolbox.call("move_to_spot", spot_id=target)
+            return TurnResult(
+                decision=TurnDecision(action_summary=f"{target}へ移動を試みた"),
+                tool_calls=[
+                    ToolCallRecord(name="move_to_spot", args={"spot_id": target}, result=result)
+                ],
+                messages=[],
+            )
+
+    return PingPong
+
+
 def _time_recording(times: list[datetime]) -> AgentFactory:
     class Recording(NoopAgent):
         def __init__(self, world: World) -> None:
@@ -184,6 +209,11 @@ def _g_initial_battery(sc: SimCtx, b: float) -> None:
 @given(parsers.parse("{n:d}時間目だけ判断に失敗するエージェントを使う"))
 def _g_failing(sc: SimCtx, n: int) -> None:
     sc.factory = _failing_at(n)
+
+
+@given("毎時 A と B を行き来しようとするエージェントを使う")
+def _g_pingpong(sc: SimCtx) -> None:
+    sc.factory = _pingpong([])
 
 
 @given("呼び出されるたびに仮想時刻を記録するエージェントを使う")
@@ -361,6 +391,28 @@ def _t_same_steps(sc: SimCtx) -> None:
     a, b = _first_two(sc)
     assert len(a.steps) == len(b.steps) == 24
     assert _dump(a.steps) == _dump(b.steps)
+
+
+@then(parsers.parse("成功した移動は {n:d} 回以下である"))
+def _t_moves_at_most(sc: SimCtx, n: int) -> None:
+    moves = [
+        c
+        for st in sc.last.steps
+        for c in st.tool_calls
+        if c.name == "move_to_spot" and c.result["ok"]
+    ]
+    assert 0 < len(moves) <= n, f"成功した移動: {len(moves)} 回"
+
+
+@then("移動予算超過で拒否された試行がある")
+def _t_budget_rejections(sc: SimCtx) -> None:
+    codes = [
+        c.result["error"]["code"]
+        for st in sc.last.steps
+        for c in st.tool_calls
+        if not c.result["ok"]
+    ]
+    assert "MOVE_BUDGET_EXCEEDED" in codes
 
 
 @then("例外は発生しない")

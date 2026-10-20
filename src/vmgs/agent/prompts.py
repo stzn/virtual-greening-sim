@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-PROMPT_VERSION = "v6"
+PROMPT_VERSION = "v7"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -145,7 +145,18 @@ SYSTEM_PROMPT_V6 = SYSTEM_PROMPT_V5.replace(
     "判断メモで last_move を確認する。\n",
 )
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V6
+# v7: 24時間の通し運用で A↔B のピンポン移動が再発した（5回中4回が無駄、電池 88%→62%）。
+# 構造側の対策として World に移動予算（直近12時間に2回まで、超過は MOVE_BUDGET_EXCEEDED）を入れ、
+# get_plant_state が moves_in_window / move_budget_remaining を返す。プロンプトは読み方と方針だけを追記する。
+SYSTEM_PROMPT_V7 = SYSTEM_PROMPT_V6.replace(
+    "## 最終回答の形式（すべてのツール呼び出しが終わった後にだけ返す）",
+    "- 移動には予算がある。get_plant_state の move_budget_remaining が 0 のときは move_to_spot を呼ばない"
+    "（呼んでも MOVE_BUDGET_EXCEEDED で拒否される）。残りが 1 のときは、植物が危険な場合だけ使う。\n"
+    "- 日影の B へ退避したら、日射が弱まるか、水分が適正に戻るまで B に留まる。A と B を行き来しない。\n\n"
+    "## 最終回答の形式（すべてのツール呼び出しが終わった後にだけ返す）",
+)
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_V7
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
@@ -153,6 +164,7 @@ PROMPTS: dict[str, str] = {
     "v4": SYSTEM_PROMPT_V4,
     "v5": SYSTEM_PROMPT_V5,
     "v6": SYSTEM_PROMPT_V6,
+    "v7": SYSTEM_PROMPT_V7,
 }
 
 

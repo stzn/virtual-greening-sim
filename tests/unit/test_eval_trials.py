@@ -91,3 +91,9 @@ def test_build_world_は直前の移動を反映し_試みない述語は失敗�
     refused = _result(("move_to_spot", {"spot_id": "A"}, False))
     assert not moved_to("A")(refused)  # 実際には移動していない
     assert not not_attempted_move_to("A")(refused)  # だが試みた
+
+
+def test_build_world_は移動予算の消費を反映する() -> None:
+    w = build_world(TrialSetup(spot="A", recent_moves_hours_ago=[3, 7]))
+    st = w.state()
+    assert (st.moves_in_window, st.move_budget_remaining) == (2, 0)

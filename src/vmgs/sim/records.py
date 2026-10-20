@@ -40,6 +40,7 @@ def plant_to_dict(p: PlantUnit) -> dict[str, Any]:
         "battery_pct": p.battery_pct,
         "status": p.status.value,
         "heat_mitigation_score": p.heat_mitigation_score,
+        "move_times": [t.isoformat() for t in p.move_times],
         "last_move": (
             {"from_spot": last.from_spot, "to_spot": last.to_spot, "at": last.at.isoformat()}
             if last
@@ -58,6 +59,7 @@ def plant_from_dict(d: dict[str, Any]) -> PlantUnit:
         battery_pct=d["battery_pct"],
         status=UnitStatus(d["status"]),
         heat_mitigation_score=d["heat_mitigation_score"],
+        move_times=[datetime.fromisoformat(t) for t in d.get("move_times", [])],
         last_move=(
             LastMove(last["from_spot"], last["to_spot"], datetime.fromisoformat(last["at"]))
             if last

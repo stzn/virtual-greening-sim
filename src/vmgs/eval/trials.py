@@ -42,6 +42,7 @@ class TrialSetup:
     forecast: list[ForecastPoint] = field(default_factory=list)
     history: list[TurnSummary] = field(default_factory=list)
     last_move: tuple[str, str, int] | None = None  # (移動元, 移動先, 何時間前)
+    recent_moves_hours_ago: list[int] = field(default_factory=list)  # 移動予算の集計用
 
 
 def build_weather(setup: TrialSetup, hours: int = 24) -> SeriesWeather:
@@ -76,6 +77,7 @@ def build_world(setup: TrialSetup) -> World:
     world.plant.moisture = setup.moisture
     world.plant.water_tank_ml = setup.tank_ml
     world.plant.battery_pct = setup.battery_pct
+    world.plant.move_times = [EVAL_START - timedelta(hours=h) for h in setup.recent_moves_hours_ago]
     if setup.last_move is not None:
         src, dst, hours_ago = setup.last_move
         world.plant.last_move = LastMove(src, dst, EVAL_START - timedelta(hours=hours_ago))

@@ -47,6 +47,8 @@ class PlantState(BaseModel):
     status: str
     heat_mitigation_score: float
     last_move: LastMoveInfo | None = None
+    moves_in_window: int = 0
+    move_budget_remaining: int = 0
 
 
 class MoveResult(BaseModel):
@@ -107,6 +109,8 @@ class World:
             battery_pct=p.battery_pct,
             status=p.status.value,
             heat_mitigation_score=p.heat_mitigation_score,
+            moves_in_window=self._moves_in_window(),
+            move_budget_remaining=max(0, self.params.move_budget_max - self._moves_in_window()),
             last_move=(
                 LastMoveInfo(
                     from_spot=last.from_spot,
@@ -161,6 +165,7 @@ class World:
         if spot_id == p.spot_id:
             raise WorldError("ALREADY_AT_SPOT", f"すでにスポット {spot_id} にいます")
         self._guard_reversal(spot_id)
+        self._guard_move_budget()
         cost = move_cost_pct(p.spot_id, spot_id, self.params)
         if p.battery_pct < cost:
             raise WorldError(
@@ -171,8 +176,35 @@ class World:
             )
         p.battery_pct -= cost
         p.last_move = LastMove(from_spot=p.spot_id, to_spot=spot_id, at=self.clock.now)
+        p.move_times.append(self.clock.now)
         p.spot_id = spot_id
         return MoveResult(new_spot_id=spot_id, battery_used_pct=cost, battery_pct=p.battery_pct)
+
+    def _moves_in_window(self) -> int:
+        window = self.params.move_budget_window_hours
+        return sum(1 for t in self.plant.move_times if self._hours_since(t) < window)
+
+    def _guard_move_budget(self) -> None:
+        """直近の移動回数が予算に達していれば拒否する（健康度が低い緊急時は免除）。"""
+        p, params = self.plant, self.params
+        if p.health < params.reversal_emergency_health:
+            return
+        recent = sorted(
+            t for t in p.move_times if self._hours_since(t) < params.move_budget_window_hours
+        )
+        if len(recent) < params.move_budget_max:
+            return
+        blocking = recent[len(recent) - params.move_budget_max]  # これが窓から外れると1回分空く
+        retry = max(1, params.move_budget_window_hours - self._hours_since(blocking))
+        raise WorldError(
+            "MOVE_BUDGET_EXCEEDED",
+            f"直近 {params.move_budget_window_hours} 時間に {len(recent)} 回移動済みで、"
+            f"移動予算（{params.move_budget_max} 回）を使い切っています。"
+            f"あと {retry} 時間は移動できません",
+            retry_after_hours=retry,
+            moves_in_window=len(recent),
+            move_budget_max=params.move_budget_max,
+        )
 
     def _guard_reversal(self, target: str) -> None:
         """直前の移動元へ短時間で戻る往復を拒否する（健康度が低い緊急時は許可）。"""

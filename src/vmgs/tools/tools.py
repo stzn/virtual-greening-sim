@@ -74,7 +74,7 @@ class ToolBox:
                 "move_to_spot",
                 "ユニットを別スポット（A:芝生広場 / B:ビルの谷間 / C:アスファルト歩道）へ移動する。"
                 "距離に応じてバッテリーを5〜10%消費する。すでにいるスポットへは移動できない。"
-                "直前の移動元へ短時間（2時間以内）で戻る往復は拒否される（健康度が低い緊急時を除く）。",
+                "直前の移動元へ短時間（2時間以内）で戻る往復は拒否される。さらに、直近12時間に移動できるのは2回までで、超えると MOVE_BUDGET_EXCEEDED で拒否される（どちらも健康度が低い緊急時を除く）。残りの移動予算は get_plant_state で分かる。",
                 MoveToSpotArgs,
                 self._move_to_spot,
             ),
@@ -138,6 +138,8 @@ class ToolBox:
             "battery_pct": _r(s.battery_pct),
             "status": s.status,
             "heat_mitigation_score": _r(s.heat_mitigation_score),
+            "moves_in_window": s.moves_in_window,
+            "move_budget_remaining": s.move_budget_remaining,
             "last_move": (
                 {
                     "from": s.last_move.from_spot,

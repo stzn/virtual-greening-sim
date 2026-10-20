@@ -90,6 +90,11 @@ def _g_last_move(ec: EvalCtx, n: int, a: str, b: str) -> None:
     ec.setup.last_move = (a, b, n)
 
 
+@given(parsers.parse("直近の移動が {a:d}時間前と {b:d}時間前にある"))
+def _g_recent_moves(ec: EvalCtx, a: int, b: int) -> None:
+    ec.setup.recent_moves_hours_ago = [a, b]
+
+
 @given("前のターンの判断要約が次のとおり1件ある")
 def _g_history(ec: EvalCtx, datatable: list[list[str]]) -> None:
     ec.setup.history = [

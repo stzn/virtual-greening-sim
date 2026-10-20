@@ -1,6 +1,6 @@
 """植物ユニットの状態と生理モデル。"""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -34,6 +34,7 @@ class PlantUnit:
     status: UnitStatus = UnitStatus.ACTIVE
     heat_mitigation_score: float = 0.0
     last_move: LastMove | None = None
+    move_times: list[datetime] = field(default_factory=list)  # 移動した時刻（予算の集計用）
 
 
 def clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
