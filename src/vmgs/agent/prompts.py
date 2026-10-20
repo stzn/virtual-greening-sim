@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-PROMPT_VERSION = "v8"
+PROMPT_VERSION = "v9"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -166,7 +166,28 @@ SYSTEM_PROMPT_V8 = SYSTEM_PROMPT_V7.replace(
     "| B へ move_to_spot する（すでに B にいる、または move_budget_remaining が 0 なら移動せず #3 へ） |",
 )
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V8
+# v9: v8 は要約崩れが 13/24 に悪化（v7: 4/24）。崩れは全て「行動ツールを呼ばないターン」で、
+# 判断メモが最後のメッセージになりJSONを返す場所が無かったため（実ログで 13/13）。
+# 最終回答は「判断メモのあとにJSONを1つ付ける」形を明示し、JSONを必須にする。パーサー側も末尾のJSONを抽出する。
+_V9_OLD_END = "判断メモだけを書いて応答を終えてはならない。行動が必要ならそのツールを呼ぶ。\n"
+_V9_OLD_FORMAT = "次のJSONだけを返す（前後に文章を付けない）:"
+assert _V9_OLD_END in SYSTEM_PROMPT_V8
+assert _V9_OLD_FORMAT in SYSTEM_PROMPT_V8
+SYSTEM_PROMPT_V9 = SYSTEM_PROMPT_V8.replace(
+    _V9_OLD_END,
+    "判断メモだけで応答を終えてはならない。行動が必要ならそのツールを呼ぶ。"
+    "行動が不要なら、判断メモのあとに最終回答のJSONを付けて終える。\n",
+).replace(
+    _V9_OLD_FORMAT,
+    "判断メモ（あれば）のあとに、次のJSONを**必ず1つ**付けて終える。何もしない場合も同じ。"
+    "JSONは1つだけで、コードブロックは使わない:",
+) + (
+    "\n例（何もしない場合の最終回答）:\n"
+    "#5: 土壌水分55%で適正、健康度100 → 何もしない\n"
+    '{"action_summary": "何もしない", "rationale": "#5 に該当（水分55%・健康度100）", "risk_notes": ""}\n'
+)
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
@@ -176,6 +197,7 @@ PROMPTS: dict[str, str] = {
     "v6": SYSTEM_PROMPT_V6,
     "v7": SYSTEM_PROMPT_V7,
     "v8": SYSTEM_PROMPT_V8,
+    "v9": SYSTEM_PROMPT_V9,
 }
 
 

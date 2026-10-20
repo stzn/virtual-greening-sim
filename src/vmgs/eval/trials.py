@@ -10,6 +10,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 from vmgs.agent.prompts import SYSTEM_PROMPT, TurnSummary
 from vmgs.agent.runner import AgentRunner, TurnResult
+from vmgs.eval.metrics import claimed_actions
 from vmgs.weather.models import WeatherRecord
 from vmgs.weather.providers import SeriesWeather
 from vmgs.world.clock import SimClock
@@ -152,6 +153,17 @@ def irrigation_within_tank(tank_ml: int) -> Predicate:
         return total <= tank_ml
 
     return pred
+
+
+def final_answer_is_json(r: TurnResult) -> bool:
+    """最終回答がJSONとして解釈できた（本文のままのフォールバックではない）。"""
+    return not r.decision.raw_fallback and not r.decision.failed
+
+
+def summary_matches_actions(r: TurnResult) -> bool:
+    """行動要約が「した」と述べた行動は、すべて成功したツール呼び出しとして実在する。"""
+    executed = {c.name for c in r.tool_calls if c.result.get("ok")}
+    return not (claimed_actions(r.decision.action_summary) - executed)
 
 
 def success_count(results: list[TurnResult], predicates: list[Predicate]) -> int:

@@ -45,13 +45,31 @@ def _llm_no_tools(actx: AgentCtx, text: str) -> None:
     actx.model = ScriptedChatModel(responses=[_final(text)])
 
 
-@given(parsers.parse('LLMは次の順にツールを呼んでから "{text}" と答える'))
-def _llm_sequence(actx: AgentCtx, datatable: list[list[str]], text: str) -> None:
-    msgs: list[AIMessage] = [
+def _tool_messages(datatable: list[list[str]]) -> list[AIMessage]:
+    return [
         tool_call_message(row["ツール"], json.loads(row.get("引数", "{}")), f"call_{i}")
         for i, row in enumerate(_table_rows(datatable))
     ]
-    actx.model = ScriptedChatModel(responses=[*msgs, _final(text)])
+
+
+def _json_body(summary: str) -> str:
+    return json.dumps({"action_summary": summary, "rationale": "理由"}, ensure_ascii=False)
+
+
+@given(parsers.parse('LLMは次の順にツールを呼んでから "{text}" と答える'))
+def _llm_sequence(actx: AgentCtx, datatable: list[list[str]], text: str) -> None:
+    actx.model = ScriptedChatModel(responses=[*_tool_messages(datatable), _final(text)])
+
+
+@given(parsers.parse('LLMは次の順にツールを呼んでから JSON で行動要約 "{text}" と答える'))
+def _llm_sequence_json(actx: AgentCtx, datatable: list[list[str]], text: str) -> None:
+    actx.model = ScriptedChatModel(responses=[*_tool_messages(datatable), _final(_json_body(text))])
+
+
+@given(parsers.parse('LLMは何もツールを呼ばず 判断メモのあとにJSONで行動要約 "{text}" と答える'))
+def _llm_memo_then_json(actx: AgentCtx, text: str) -> None:
+    memo = "#1: 降水確率5%<60% × → 非該当\n#5: 水分55% ∈[30,70] ○ → 何もしない\n\n"
+    actx.model = ScriptedChatModel(responses=[_final(memo + _json_body(text))])
 
 
 @given(parsers.parse("LLMは {tool} を永遠に呼び続ける"))
@@ -122,6 +140,11 @@ def _decision_fields(actx: AgentCtx, names: str) -> None:
     for n in names.split("・"):
         assert fields[n.strip()] in dumped
     assert isinstance(_result(actx).decision, TurnDecision)
+
+
+@then(parsers.parse('判断理由に "{text}" が含まれる'))
+def _rationale_has(actx: AgentCtx, text: str) -> None:
+    assert text in _result(actx).decision.rationale
 
 
 @then("判断は上限到達で打ち切られたと記録される")

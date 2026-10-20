@@ -64,3 +64,50 @@ def test_プロンプトv8は移動予算をチェックリストの条件に含
     assert "move_budget_remaining が 1 以上" not in next(
         line for line in PROMPTS["v7"].splitlines() if line.startswith("| 2 |")
     )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ('メモ\n{"action_summary": "維持", "rationale": "r"}', "維持"),
+        ('```json\n{"action_summary": "維持"}\n```', "維持"),
+        ('{"action_summary": "古い"}\n言い直す\n{"action_summary": "新しい"}', "新しい"),
+        ('#2: {気温28 < 33} ×\n{"action_summary": "何もしない"}', "何もしない"),
+        ('{"action_summary": "維持", "extra": {"a": 1}}', "維持"),
+    ],
+)
+def test_parse_decision_は本文中の最後のJSONを抽出する(text: str, expected: str) -> None:
+    d = parse_decision(text)
+    assert d.action_summary == expected
+    assert d.raw_fallback is False
+
+
+@pytest.mark.parametrize("text", ['{"foo": 1}', "#1: 非該当", '{"action_summary": ', "{}"])
+def test_parse_decision_はaction_summaryを持つJSONが無ければフォールバック(text: str) -> None:
+    assert parse_decision(text).raw_fallback is True
+
+
+def test_summarize_executed_は成功した行動だけを順に要約する() -> None:
+    from vmgs.agent.graph import ToolCallRecord, summarize_executed
+
+    def rec(name: str, args: dict[str, object], result: dict[str, object]) -> ToolCallRecord:
+        return ToolCallRecord(name=name, args=args, result=result)
+
+    calls = [
+        rec("get_plant_state", {}, {"ok": True}),
+        rec("move_to_spot", {"spot_id": "B"}, {"ok": True, "new_spot_id": "B"}),
+        rec("irrigate", {"amount_ml": 800}, {"ok": False, "error": {"code": "X"}}),
+        rec("irrigate", {"amount_ml": 500}, {"ok": True}),
+    ]
+    assert summarize_executed(calls) == "Bへ移動、500ml散水"
+    assert summarize_executed(calls[:1]) == "何もしない"
+    assert summarize_executed([]) == "何もしない"
+
+
+def test_プロンプトv9は最終回答のJSONを必須にし_メモのあとに付ける形を示す() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS
+
+    assert PROMPT_VERSION == "v9"
+    assert "必ず1つ" in PROMPTS["v9"]
+    assert "必ず1つ" not in PROMPTS["v8"]
+    assert "次のJSONだけを返す" not in PROMPTS["v9"]

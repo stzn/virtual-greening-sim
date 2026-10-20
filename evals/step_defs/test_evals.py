@@ -21,6 +21,7 @@ from vmgs.eval.trials import (
     any_of,
     called,
     checked_state_before_acting,
+    final_answer_is_json,
     irrigation_within_tank,
     moved_to,
     not_attempted_move_to,
@@ -28,6 +29,7 @@ from vmgs.eval.trials import (
     not_moved_to,
     run_trials,
     success_count,
+    summary_matches_actions,
 )
 
 pytestmark = pytest.mark.eval
@@ -138,6 +140,16 @@ def _t_move_or_irrigate(ec: EvalCtx, spot: str) -> None:
 @then(parsers.parse('move_to_spot で "{spot}" への移動を試みない'))
 def _t_not_attempted(ec: EvalCtx, spot: str) -> None:
     ec.predicates.append(not_attempted_move_to(spot))
+
+
+@then("最終回答はJSONで解釈できる")
+def _t_json(ec: EvalCtx) -> None:
+    ec.predicates.append(final_answer_is_json)
+
+
+@then("行動要約は実際のツール呼び出しと矛盾しない")
+def _t_consistent(ec: EvalCtx) -> None:
+    ec.predicates.append(summary_matches_actions)
 
 
 @then("副作用のあるツールの前に get_plant_state が呼ばれている")

@@ -74,21 +74,50 @@ def message_text(msg: AnyMessage) -> str:
     return "".join(parts)
 
 
+_DECODER = json.JSONDecoder()
+
+
+def _extract_decision_json(text: str) -> dict[str, Any] | None:
+    """本文中のJSONオブジェクトのうち、action_summary を持つ最後のものを返す。
+
+    最終回答は「判断メモのあとにJSONを1つ」の形を許す（行動ツールを呼ばないターンでは、
+    メモが最後のメッセージになるため）。コードブロックで囲まれていても拾える。
+    """
+    found: dict[str, Any] | None = None
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = _DECODER.raw_decode(text, m.start())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "action_summary" in obj:
+            found = obj
+    return found
+
+
 def parse_decision(text: str) -> TurnDecision:
-    """最終回答のJSONを解釈する。JSONでなければ本文を行動要約として扱う。"""
-    stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
-    try:
-        data = json.loads(stripped)
-    except json.JSONDecodeError:
-        return TurnDecision(action_summary=text.strip(), rationale=text.strip(), raw_fallback=True)
-    if not isinstance(data, dict):
+    """最終回答から判断を取り出す。JSONが無ければ本文を判断理由とし、raw_fallback を立てる。"""
+    obj = _extract_decision_json(text)
+    if obj is None:
         return TurnDecision(action_summary=text.strip(), rationale=text.strip(), raw_fallback=True)
     return TurnDecision(
         raw_fallback=False,
-        action_summary=str(data.get("action_summary", "")),
-        rationale=str(data.get("rationale", "")),
-        risk_notes=str(data.get("risk_notes", "")),
+        action_summary=str(obj.get("action_summary", "")),
+        rationale=str(obj.get("rationale", "")),
+        risk_notes=str(obj.get("risk_notes", "")),
     )
+
+
+def summarize_executed(calls: list["ToolCallRecord"]) -> str:
+    """実際に成功した行動（移動・散水）から要約を作る。JSONが無いときに、本文の代わりに使う。"""
+    parts: list[str] = []
+    for c in calls:
+        if not c.result.get("ok"):
+            continue
+        if c.name == "move_to_spot":
+            parts.append(f"{c.result['new_spot_id']}へ移動")
+        elif c.name == "irrigate":
+            parts.append(f"{c.args['amount_ml']}ml散水")
+    return "、".join(parts) if parts else "何もしない"
 
 
 def langchain_tools(toolbox: ToolBox) -> list[StructuredTool]:
@@ -165,9 +194,12 @@ def build_turn_graph(
         ais = [m for m in state["messages"] if isinstance(m, AIMessage)]
         text = message_text(ais[-1]) if ais else ""
         decision = parse_decision(text)
+        if decision.raw_fallback:
+            # 次ターンの記憶になる要約に本文（判断メモ）を入れない。実行した行動から作る
+            decision.action_summary = summarize_executed(state["tool_log"])
         if state["truncated"]:
             decision.truncated = True
-            if not decision.action_summary:
+            if decision.action_summary == "何もしない":
                 decision.action_summary = "ツール呼び出し上限に達したため打ち切り"
         return {"decision": decision}
 
