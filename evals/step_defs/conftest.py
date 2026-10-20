@@ -71,7 +71,7 @@ def scoreboard(settings: Settings) -> Iterator[list[dict[str, Any]]]:
     payload = {
         "provider": provider,
         "model": model,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": os.environ.get("EVAL_PROMPT", PROMPT_VERSION),
         "scenarios": rows,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")

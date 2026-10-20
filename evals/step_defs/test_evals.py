@@ -3,6 +3,7 @@
 実LLMを複数回呼ぶため、既定の `pytest` からは除外されている。
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from vmgs.agent.prompts import TurnSummary
+from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, TurnSummary
 from vmgs.agent.runner import TurnResult
 from vmgs.eval.trials import (
     DEFAULT_TRIALS,
@@ -93,7 +94,8 @@ def _g_history(ec: EvalCtx, datatable: list[list[str]]) -> None:
 # ---------------- When ----------------
 @when("エージェントに1ターン判断させる")
 def _w_run(ec: EvalCtx, eval_model: BaseChatModel) -> None:
-    ec.results = run_trials(eval_model, ec.setup, DEFAULT_TRIALS)
+    version = os.environ.get("EVAL_PROMPT", PROMPT_VERSION)
+    ec.results = run_trials(eval_model, ec.setup, DEFAULT_TRIALS, PROMPTS[version])
 
 
 # ---------------- Then（述語を登録し、最後の「N回中M回」でまとめて判定） ----------------

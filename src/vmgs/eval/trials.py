@@ -8,7 +8,7 @@ from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from vmgs.agent.prompts import TurnSummary
+from vmgs.agent.prompts import SYSTEM_PROMPT, TurnSummary
 from vmgs.agent.runner import AgentRunner, TurnResult
 from vmgs.weather.models import WeatherRecord
 from vmgs.weather.providers import SeriesWeather
@@ -78,12 +78,15 @@ def build_world(setup: TrialSetup) -> World:
 
 
 def run_trials(
-    model: BaseChatModel, setup: TrialSetup, n: int = DEFAULT_TRIALS
+    model: BaseChatModel,
+    setup: TrialSetup,
+    n: int = DEFAULT_TRIALS,
+    system_prompt: str = SYSTEM_PROMPT,
 ) -> list[TurnResult]:
     """試行ごとに新しい World・Runner で1ターン判断させる（試行間の影響を排除）。"""
     results: list[TurnResult] = []
     for _ in range(n):
-        runner = AgentRunner(model, build_world(setup))
+        runner = AgentRunner(model, build_world(setup), system_prompt=system_prompt)
         runner.history = list(setup.history)
         results.append(runner.run_turn())
     return results
