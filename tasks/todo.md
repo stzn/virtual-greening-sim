@@ -17,11 +17,12 @@
   - [x] 2-4/2-5 実LLM(qwen3:14b)での観察と初回スコア記録 → docs/eval-results.md（v1: ツール呼ばず / v2: ツールは呼ぶが状況に応じた判断になっていない）
   - [x] プロンプト v3〜v5: 判断ルール明示で 5/8 → 7/8（docs/eval-results.md）。往復移動は世界側ガード+last_move観測で対策済み（v6、docs/eval-results.md）。履歴が文章のみのシナリオは0/5のまま（既知）
   - [ ] 評価の試行にばらつきを導入（temperature=0 で5回が同一トレースになっている）
-- [ ] フェーズ3: 24h タイムステップ・シミュレーション
+- [x] フェーズ3: 24h タイムステップ・シミュレーション
   - [x] 3-0 feature（sim/simulation 10件・checkpoint 5件・metrics 6件、agent/baseline 7件＝計28件、Red確認済み）
   - [x] 3-1 24hループ+CLI(`vmgs run`) / 3-2 ターン間記憶 / 3-3 チェックポイントと再開 / 3-4 ログ(steps.jsonl・summary.json・research_notes.md)
   - [x] 3-5 トレードオフ preset(`--preset tradeoff`) / 3-6 比較(`vmgs compare`) / 3-7 結果グラフ(timeseries.png)。全129テスト緑
-  - [ ] 3-6(LLM) 実LLMで24h実行しベースラインと比較（docs/eval-results.md に記録）
+  - [x] 3-6(LLM) 実LLMで24h実行しベースラインと比較（docs/eval-results.md）。健康度は同等、A↔Bピンポン4回・要約崩れ・宣言のみ1件が判明
+- [x] フェーズ3 完了
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 
 ## 開発ルール（BDD）
