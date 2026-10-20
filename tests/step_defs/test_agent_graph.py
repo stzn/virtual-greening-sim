@@ -61,6 +61,12 @@ def _llm_forever(actx: AgentCtx, tool: str) -> None:
     )
 
 
+@given(parsers.parse('LLMは何もツールを呼ばず JSON で行動要約 "{text}" と答える'))
+def _llm_json_final(actx: AgentCtx, text: str) -> None:
+    body = json.dumps({"action_summary": text, "rationale": "理由"}, ensure_ascii=False)
+    actx.model = ScriptedChatModel(responses=[_final(body)])
+
+
 @given("LLMの呼び出しは例外で失敗する")
 def _llm_fail(actx: AgentCtx) -> None:
     actx.model = ScriptedChatModel(responses=[], fail=True)
@@ -121,6 +127,16 @@ def _decision_fields(actx: AgentCtx, names: str) -> None:
 @then("判断は上限到達で打ち切られたと記録される")
 def _truncated(actx: AgentCtx) -> None:
     assert _result(actx).decision.truncated is True
+
+
+@then("判断は要約崩れとして記録される")
+def _malformed(actx: AgentCtx) -> None:
+    assert _result(actx).decision.raw_fallback is True
+
+
+@then("判断は要約崩れではない")
+def _not_malformed(actx: AgentCtx) -> None:
+    assert _result(actx).decision.raw_fallback is False
 
 
 @then("判断は失敗として記録される")

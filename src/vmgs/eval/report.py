@@ -21,11 +21,15 @@ COLUMNS: list[tuple[str, str]] = [
     ("heat_mitigation_score", "暑熱緩和"),
     ("move_count", "移動"),
     ("wasted_moves", "無駄な移動"),
+    ("rejected_moves", "拒否移動"),
+    ("guard_rejections", "ガード拒否"),
     ("irrigation_total_ml", "散水(ml)"),
     ("irrigation_before_rain", "雨前散水"),
     ("final_battery", "電池%"),
     ("final_tank_ml", "タンク(ml)"),
     ("decision_failures", "判断失敗"),
+    ("malformed_summaries", "要約崩れ"),
+    ("unexecuted_claims", "宣言のみ"),
     ("tool_errors", "ツールエラー"),
 ]
 

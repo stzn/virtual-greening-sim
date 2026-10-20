@@ -19,7 +19,7 @@ from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from vmgs.tools.tools import ToolBox
 
@@ -35,6 +35,20 @@ class TurnDecision(BaseModel):
     truncated: bool = False  # ツール呼び出し上限で打ち切られた
     failed: bool = False  # LLM呼び出しが失敗した
     error: str | None = None
+    raw_fallback: bool = False  # 最終回答がJSONにならず、本文をそのまま要約にした（要約崩れ）
+
+    @model_validator(mode="before")
+    @classmethod
+    def _infer_legacy_raw_fallback(cls, data: Any) -> Any:
+        """旧ログ互換: raw_fallback の記録が無く、要約と判断理由が同一なら要約崩れとみなす。
+
+        parse_decision のフォールバックは要約と判断理由に同じ本文を入れていたため。
+        """
+        if isinstance(data, dict) and "raw_fallback" not in data:
+            summary = data.get("action_summary")
+            if summary and summary == data.get("rationale"):
+                return {**data, "raw_fallback": True}
+        return data
 
 
 class ToolCallRecord(BaseModel):
@@ -66,10 +80,11 @@ def parse_decision(text: str) -> TurnDecision:
     try:
         data = json.loads(stripped)
     except json.JSONDecodeError:
-        return TurnDecision(action_summary=text.strip(), rationale=text.strip())
+        return TurnDecision(action_summary=text.strip(), rationale=text.strip(), raw_fallback=True)
     if not isinstance(data, dict):
-        return TurnDecision(action_summary=text.strip(), rationale=text.strip())
+        return TurnDecision(action_summary=text.strip(), rationale=text.strip(), raw_fallback=True)
     return TurnDecision(
+        raw_fallback=False,
         action_summary=str(data.get("action_summary", "")),
         rationale=str(data.get("rationale", "")),
         risk_notes=str(data.get("risk_notes", "")),

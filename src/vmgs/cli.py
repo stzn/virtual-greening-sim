@@ -15,7 +15,8 @@ from vmgs.agent.llm import MissingApiKeyError, make_chat_model
 from vmgs.agent.protocol import AgentFactory
 from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
-from vmgs.eval.report import compare_agents, plot_run
+from vmgs.eval.metrics import Metrics, metrics_from_run
+from vmgs.eval.report import ComparisonReport, compare_agents, plot_run
 from vmgs.sim.presets import PRESETS
 from vmgs.sim.simulate import SimConfig, SimulationError, resume_simulation, run_simulation
 from vmgs.sim.store import RunStore
@@ -132,7 +133,7 @@ def _print_result(result: object, run_dir: Path) -> None:
         print(
             f"最終健康度 {m.final_health:.1f} / 最低 {m.min_health:.1f} / 暑熱緩和 {m.heat_mitigation_score:.1f} / "
             f"移動 {m.move_count}（無駄 {m.wasted_moves}）/ 散水 {m.irrigation_total_ml}ml（雨前 {m.irrigation_before_rain}）/ "
-            f"電池 {m.final_battery:.1f}% / タンク {m.final_tank_ml}ml / 判断失敗 {m.decision_failures} / ツールエラー {m.tool_errors}"
+            f"電池 {m.final_battery:.1f}% / タンク {m.final_tank_ml}ml / 判断失敗 {m.decision_failures} / 要約崩れ {m.malformed_summaries} / 宣言のみ {m.unexecuted_claims} / 拒否移動 {m.rejected_moves}（ガード {m.guard_rejections}） / ツールエラー {m.tool_errors}"
         )
     if result.steps:
         plot_run(result.steps, run_dir / "timeseries.png", result.run_id)
@@ -179,6 +180,22 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"エラー: {e}", file=sys.stderr)
         return 2
     _print_result(result, result.run_dir)
+    return 0
+
+
+def cmd_metrics(args: argparse.Namespace) -> int:
+    """保存済みの実行から、現在の定義で指標を再計算して並べる。"""
+    rows: dict[str, Metrics] = {}
+    scenario = ""
+    for run_id in args.run_ids:
+        store = RunStore(RUNS_DIR / run_id)
+        if not store.exists():
+            print(f"エラー: 実行 {run_id!r} が見つかりません", file=sys.stderr)
+            return 2
+        config = SimConfig.model_validate(store.read_meta()["config"])
+        scenario = scenario or config.scenario
+        rows[run_id] = metrics_from_run(store.dir, _load_weather(config.scenario))
+    print(ComparisonReport(scenario=scenario, rows=rows).to_markdown())
     return 0
 
 
@@ -241,6 +258,10 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--stop-after", type=int, help="N ステップで中断する（--resume で再開できる）")
     r.add_argument("--resume", metavar="RUN_ID", help="チェックポイントから再開する")
     r.set_defaults(func=cmd_run)
+
+    mt = sub.add_parser("metrics", help="保存済みの実行から指標を再計算して並べる")
+    mt.add_argument("run_ids", nargs="+", metavar="RUN_ID")
+    mt.set_defaults(func=cmd_metrics)
 
     c = sub.add_parser("compare", help="複数のエージェントを同じ気象で比較する")
     add_sim_options(c)

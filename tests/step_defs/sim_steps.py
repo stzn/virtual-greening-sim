@@ -15,9 +15,11 @@ from vmgs.agent.protocol import AgentFactory
 from vmgs.agent.runner import TurnResult
 from vmgs.eval.metrics import (
     Metrics,
+    MoveEvent,
     compute_metrics,
     count_irrigation_before_rain,
     count_wasted_moves,
+    metrics_from_run,
 )
 from vmgs.eval.report import ComparisonReport, compare_agents
 from vmgs.sim.records import StepRecord
@@ -44,6 +46,10 @@ METRIC_KEYS = {
     "散水総量": "irrigation_total_ml",
     "最終バッテリー": "final_battery",
     "最終タンク残量": "final_tank_ml",
+    "拒否された移動": "rejected_moves",
+    "ガードによる拒否": "guard_rejections",
+    "要約崩れ": "malformed_summaries",
+    "宣言のみ": "unexecuted_claims",
 }
 
 
@@ -63,7 +69,8 @@ class SimCtx:
         self.error: Exception | None = None
         self.seen: dict[int, list[str]] = {}  # ステップ番号 → そのターンの入力に入っていた要約
         self.call_times: list[datetime] = []
-        self.moves: list[tuple[str, str]] = []
+        self.moves: list[MoveEvent] = []
+        self.recomputed: Metrics | None = None
         self.irrigation_times: list[datetime] = []
         self.constant_weather = ConstantWeather(precipitation_prob_pct=80.0)
         self.counted = 0
@@ -226,9 +233,86 @@ def _g_unique(sc: SimCtx) -> None:
     sc.factory = _unique_summary(sc.seen)
 
 
-@given("移動記録が A→B、B→A、A→C の順にある")
-def _g_moves(sc: SimCtx) -> None:
-    sc.moves = [("A", "B"), ("B", "A"), ("A", "C")]
+@given("移動記録が次のとおりある")
+def _g_moves(sc: SimCtx, datatable: list[list[str]]) -> None:
+    header, *rows = datatable
+    sc.moves = []
+    for row in rows:
+        rec = dict(zip(header, row, strict=True))
+        a, b = rec["移動"].split("→")
+        hh, mm = rec["時刻"].split(":")
+        sc.moves.append(MoveEvent(datetime(2025, 8, 1, int(hh), int(mm)), a, b))
+
+
+_BASE_STATE: dict[str, Any] = {
+    "spot_id": "A",
+    "health": 80.0,
+    "heat_mitigation_score": 0.0,
+    "battery_pct": 90.0,
+    "water_tank_ml": 5000,
+}
+
+
+def _step(i: int, decision: TurnDecision, calls: list[ToolCallRecord] | None = None) -> StepRecord:
+    return StepRecord(
+        step=i,
+        time=f"2025-08-01T{i % 24:02d}:00",
+        state_before=_BASE_STATE,
+        state_after=_BASE_STATE,
+        tool_calls=calls or [],
+        decision=decision,
+    )
+
+
+def _move_call(ok: bool, code: str = "") -> ToolCallRecord:
+    result: dict[str, Any] = (
+        {"ok": True, "new_spot_id": "B"} if ok else {"ok": False, "error": {"code": code}}
+    )
+    return ToolCallRecord(name="move_to_spot", args={"spot_id": "B"}, result=result)
+
+
+@given("移動の試行が次の結果で記録されている")
+def _g_attempts(sc: SimCtx, datatable: list[list[str]]) -> None:
+    calls = [
+        _move_call(True) if row[0] == "成功" else _move_call(False, row[0]) for row in datatable[1:]
+    ]
+    sc.synthetic = [_step(1, TurnDecision(action_summary="現状維持"), calls)]
+
+
+@given(parsers.parse("要約が崩れたステップが {a:d} 件、正常なステップが {b:d} 件ある"))
+def _g_malformed(sc: SimCtx, a: int, b: int) -> None:
+    broken = TurnDecision(
+        action_summary="#1: 移動 → 非該当", rationale="#1: 移動 → 非該当", raw_fallback=True
+    )
+    sc.synthetic = [_step(i + 1, broken) for i in range(a)]
+    sc.synthetic += [_step(a + i + 1, TurnDecision(action_summary="現状維持")) for i in range(b)]
+
+
+@given(parsers.parse('判断の行動要約は "{summary}" で、ツール呼び出しは {tool} である'))
+def _g_claim(sc: SimCtx, summary: str, tool: str) -> None:
+    calls: list[ToolCallRecord] = []
+    if tool.startswith("失敗した "):
+        calls = [
+            ToolCallRecord(
+                name=tool.removeprefix("失敗した "),
+                args={"spot_id": "B"},
+                result={"ok": False, "error": {"code": "X"}},
+            )
+        ]
+    elif tool != "なし":
+        args: dict[str, Any] = {"amount_ml": 500} if tool == "irrigate" else {"spot_id": "B"}
+        result: dict[str, Any] = (
+            {"ok": True, "new_spot_id": "B"} if tool == "move_to_spot" else {"ok": True}
+        )
+        calls = [ToolCallRecord(name=tool, args=args, result=result)]
+    sc.synthetic = [_step(1, TurnDecision(action_summary=summary), calls)]
+
+
+@given("旧形式の判断（要約崩れの記録なし）で要約と判断理由が同一のステップが 1 件ある")
+def _g_legacy(sc: SimCtx) -> None:
+    legacy = {"action_summary": "#1: 降水確率 → 非該当", "rationale": "#1: 降水確率 → 非該当"}
+    assert "raw_fallback" not in legacy  # 旧ログには無かったキー
+    sc.synthetic = [_step(1, TurnDecision.model_validate(legacy))]
 
 
 @given("散水の記録の直後の3時間以内に降水確率 70% 以上の時間がある")
@@ -329,6 +413,11 @@ def _w_count_wasted(sc: SimCtx) -> None:
 @when("降雨直前の散水を数える")
 def _w_count_rain(sc: SimCtx) -> None:
     sc.counted = count_irrigation_before_rain(sc.irrigation_times, sc.constant_weather)
+
+
+@when("保存済みの実行から指標を再計算する")
+def _w_recompute(sc: SimCtx) -> None:
+    sc.recomputed = metrics_from_run(sc.last.run_dir, sc.require_weather())
 
 
 @when("指標を算出する")
@@ -494,16 +583,21 @@ def _t_metric_keys(sc: SimCtx, names: str) -> None:
         assert METRIC_KEYS[n.strip()] in dumped, n
 
 
+def _metrics(sc: SimCtx) -> Metrics:
+    """合成した指標があればそれを、無ければ直近の実行の指標を返す。"""
+    m = sc.metrics if sc.metrics is not None else sc.last.metrics
+    assert m is not None
+    return m
+
+
 @then(parsers.parse("指標の移動回数は {n:d} である"))
 def _t_metric_moves(sc: SimCtx, n: int) -> None:
-    assert sc.last.metrics is not None
-    assert sc.last.metrics.move_count == n
+    assert _metrics(sc).move_count == n
 
 
 @then(parsers.parse("指標の散水総量は {n:d}ml である"))
 def _t_metric_irrigation(sc: SimCtx, n: int) -> None:
-    assert sc.last.metrics is not None
-    assert sc.last.metrics.irrigation_total_ml == n
+    assert _metrics(sc).irrigation_total_ml == n
 
 
 @then(parsers.parse("無駄な移動は {n:d} 回である"))
@@ -522,6 +616,33 @@ def _t_metric_failures(sc: SimCtx, n: int) -> None:
 def _t_metric_tool_errors(sc: SimCtx, n: int) -> None:
     assert sc.metrics is not None
     assert sc.metrics.tool_errors == n
+
+
+@then(parsers.parse("指標の拒否された移動は {n:d} 回である"))
+def _t_rejected(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).rejected_moves == n
+
+
+@then(parsers.parse("指標のガードによる拒否は {n:d} 回である"))
+def _t_guard_rejections(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).guard_rejections == n
+
+
+@then(parsers.parse("指標の要約崩れは {n:d} である"))
+def _t_malformed(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).malformed_summaries == n
+
+
+@then(parsers.parse("指標の宣言のみは {n:d} である"))
+def _t_unexecuted(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).unexecuted_claims == n
+
+
+@then("再計算した指標は実行時の指標と一致する")
+def _t_recomputed(sc: SimCtx) -> None:
+    assert sc.recomputed is not None
+    assert sc.last.metrics is not None
+    assert sc.recomputed == sc.last.metrics
 
 
 @then("比較レポートに両方のエージェントの指標が並ぶ")
