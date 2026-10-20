@@ -457,3 +457,17 @@ LLM 判断品質（`evals/features/rain.feature`）:
 - 会話はターンごとにリセットし、直近3ターンの判断要約のみ持ち越す（`AgentRunner.history`）。
 - `ScriptedChatModel`（`agent/fake.py`）でグラフ制御を決定論的にテスト。`vmgs turn --dry-run` で APIキーなしの動作確認ができる。
 - 未実施: 実LLMでの観察（2-4/2-5）と評価シナリオのステップ定義（2-7）。APIキー（`.env`）が必要。
+
+
+## 付録: フェーズ3 実装メモ
+
+- ランナー: `src/vmgs/sim/simulate.py`。毎時 `agent.run_turn()` → `world.advance(1)`。時間を進めるのはランナーだけ。
+  エージェントは `TurnAgent` プロトコル（`history` と `run_turn()`）を満たせば LLM でもルールベースでも差し替えられる。
+- 終了理由: `COMPLETED` / `DEAD`（枯死で打ち切り）/ `WEATHER_EXHAUSTED`（気象データ切れ）/ `STOPPED`（`--stop-after`）。
+  計画からの変更: **`STRANDED`（電池切れ）では終了しない**。日向なら発電で回復し、散水も続けられるため。
+- チェックポイント: 計画の `SqliteSaver` ではなく、**ステップごとの JSON**（`checkpoints/step_NNN.json`）にした。
+  1ターンの会話はターンごとにリセットする設計で、再開に必要なのは「世界の状態＋直近の判断要約」だけのため。
+  再開時はチェックポイントより先の `steps.jsonl` を切り詰めて整合させる。
+- `StepRecord.state_after` は「行動後に1時間経過した時点」。次ステップの `state_before` と一致し、チェックポイントとも同じ。
+- ベースライン: `src/vmgs/agent/baseline.py`（降水予報で散水しない／日向猛暑で水分少なら日影へ／乾燥なら散水）。
+- feature の文言修正: checkpoint.feature の「翌日の0時から8時間後」は誤りだったため「開始から 8 時間後」に直した。

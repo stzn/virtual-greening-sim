@@ -29,6 +29,10 @@ class SeriesWeather:
     def __init__(self, records: list[WeatherRecord]) -> None:
         self._by_hour = {floor_hour(r.time): r for r in records}
 
+    @property
+    def first_time(self) -> datetime:
+        return min(self._by_hour)
+
     def at(self, t: datetime) -> WeatherRecord:
         try:
             return self._by_hour[floor_hour(t)]

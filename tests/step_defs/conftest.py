@@ -300,3 +300,7 @@ def keys_of(names: str) -> list[str]:
 
 def find_key(result: dict[str, Any], key: str) -> bool:
     return key in result or key in result.get("current", {})
+
+
+# 24時間シミュレーション用のステップ定義と fixture（sc）を取り込む
+from tests.step_defs.sim_steps import *

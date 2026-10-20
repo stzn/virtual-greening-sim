@@ -50,3 +50,15 @@ OLLAMA_BASE_URL=http://localhost:11434
 - メモリが厳しい場合は `qwen3:8b` に変更する。
 - Qwen3 は思考(thinking)を出力するため、最終回答のJSON解釈に影響することがある（問題が出たら要対応）。
 - 接続できない場合、`vmgs turn` は「判断失敗（接続エラー）」として記録して終了し、評価(`pytest evals`)は理由付きでスキップされる。
+
+## 24時間シミュレーション
+```bash
+uv run vmgs run --scenario heatwave --agent baseline        # ルールベースで24時間
+uv run vmgs run --scenario heatwave --agent llm --provider ollama --model qwen3:14b
+uv run vmgs run --scenario normal --stop-after 8 --run-id demo   # 8時間で中断
+uv run vmgs run --resume demo                                    # チェックポイントから再開
+uv run vmgs compare --scenario heatwave --agents baseline,noop   # 同じ気象で比較（llm も指定可）
+uv run vmgs compare --preset tradeoff --agents baseline,noop     # 14時・猛暑・歩道C・水分25%・タンク少
+```
+実行ごとに `runs/<run_id>/` へ `steps.jsonl`（毎時の状態・ツール呼び出し・判断）、`summary.json`（終了理由・指標）、
+`checkpoints/`、`research_notes.md`、`timeseries.png` を保存する。

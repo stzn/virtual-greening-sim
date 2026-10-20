@@ -19,8 +19,9 @@
   - [ ] 評価の試行にばらつきを導入（temperature=0 で5回が同一トレースになっている）
 - [ ] フェーズ3: 24h タイムステップ・シミュレーション
   - [x] 3-0 feature（sim/simulation 10件・checkpoint 5件・metrics 6件、agent/baseline 7件＝計28件、Red確認済み）
-  - [ ] 3-1 24hループ+CLI / 3-2 ターン間記憶 / 3-3 チェックポイントと再開 / 3-4 ログ(steps.jsonl・research_notes.md)
-  - [ ] 3-5 トレードオフシナリオ / 3-6 ベースライン比較 / 3-7 結果グラフ
+  - [x] 3-1 24hループ+CLI(`vmgs run`) / 3-2 ターン間記憶 / 3-3 チェックポイントと再開 / 3-4 ログ(steps.jsonl・summary.json・research_notes.md)
+  - [x] 3-5 トレードオフ preset(`--preset tradeoff`) / 3-6 比較(`vmgs compare`) / 3-7 結果グラフ(timeseries.png)。全129テスト緑
+  - [ ] 3-6(LLM) 実LLMで24h実行しベースラインと比較（docs/eval-results.md に記録）
 - [ ] フェーズ4: 可観測性とプロンプト最適化
 
 ## 開発ルール（BDD）

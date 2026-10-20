@@ -4,14 +4,21 @@ import argparse
 import json
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from vmgs.agent.baseline import BaselineAgent, NoopAgent
 from vmgs.agent.fake import ScriptedChatModel, tool_call_message
 from vmgs.agent.llm import MissingApiKeyError, make_chat_model
+from vmgs.agent.protocol import AgentFactory
 from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
+from vmgs.eval.report import compare_agents, plot_run
+from vmgs.sim.presets import PRESETS
+from vmgs.sim.simulate import SimConfig, SimulationError, resume_simulation, run_simulation
+from vmgs.sim.store import RunStore
 from vmgs.weather.cache import load_records
 from vmgs.weather.providers import SeriesWeather
 from vmgs.world.clock import SimClock
@@ -75,6 +82,126 @@ def cmd_turn(args: argparse.Namespace) -> int:
     return 0
 
 
+RUNS_DIR = Path("runs")
+
+
+def _agent_factory(name: str, provider: str | None, model: str | None) -> AgentFactory:
+    if name == "baseline":
+        return BaselineAgent
+    if name == "noop":
+        return NoopAgent
+    overrides: dict[str, str] = {}
+    if provider:
+        overrides["llm_provider"] = provider
+    if model:
+        overrides["llm_model"] = model
+    chat = make_chat_model(Settings(**overrides))  # type: ignore[arg-type]
+    return lambda world: AgentRunner(chat, world)
+
+
+def _load_weather(scenario: str) -> SeriesWeather | None:
+    path = WEATHER_DIR / f"{scenario}.json"
+    if not path.exists():
+        print(
+            f"シナリオが見つかりません: {path}（scripts/fetch_scenarios.py で作成）",
+            file=sys.stderr,
+        )
+        return None
+    return SeriesWeather(load_records(path))
+
+
+def _build_config(args: argparse.Namespace) -> SimConfig:
+    base = PRESETS[args.preset] if args.preset else SimConfig(scenario=args.scenario)
+    updates: dict[str, object] = {}
+    if args.hours is not None:
+        updates["hours"] = args.hours
+    if args.spot is not None:
+        updates["spot"] = args.spot
+    if args.moisture is not None:
+        updates["initial_moisture"] = args.moisture
+    return base.model_copy(update=updates)
+
+
+def _print_result(result: object, run_dir: Path) -> None:
+    from vmgs.sim.simulate import SimulationResult
+
+    assert isinstance(result, SimulationResult)
+    print(f"実行: {result.run_id}  終了理由: {result.reason}  ステップ: {len(result.steps)}")
+    m = result.metrics
+    if m is not None:
+        print(
+            f"最終健康度 {m.final_health:.1f} / 最低 {m.min_health:.1f} / 暑熱緩和 {m.heat_mitigation_score:.1f} / "
+            f"移動 {m.move_count}（無駄 {m.wasted_moves}）/ 散水 {m.irrigation_total_ml}ml（雨前 {m.irrigation_before_rain}）/ "
+            f"電池 {m.final_battery:.1f}% / タンク {m.final_tank_ml}ml / 判断失敗 {m.decision_failures} / ツールエラー {m.tool_errors}"
+        )
+    if result.steps:
+        plot_run(result.steps, run_dir / "timeseries.png", result.run_id)
+        print(f"ログ: {run_dir}（steps.jsonl / summary.json / timeseries.png）")
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    try:
+        if args.resume:
+            meta = (
+                RunStore(RUNS_DIR / args.resume).read_meta()
+                if (RUNS_DIR / args.resume / "run.json").exists()
+                else None
+            )
+            if meta is None:
+                print(f"エラー: 実行 {args.resume!r} が見つかりません", file=sys.stderr)
+                return 2
+            config = SimConfig.model_validate(meta["config"])
+            weather = _load_weather(config.scenario)
+            if weather is None:
+                return 2
+            factory = _agent_factory(args.agent or meta["agent"], args.provider, args.model)
+            result = resume_simulation(
+                args.resume, RUNS_DIR, weather, factory, stop_after=args.stop_after
+            )
+        else:
+            config = _build_config(args)
+            weather = _load_weather(config.scenario)
+            if weather is None:
+                return 2
+            agent_name = args.agent or "baseline"
+            factory = _agent_factory(agent_name, args.provider, args.model)
+            run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M%S}_{config.scenario}_{agent_name}"
+            result = run_simulation(
+                config,
+                weather,
+                factory,
+                RUNS_DIR,
+                run_id,
+                agent_name=agent_name,
+                stop_after=args.stop_after,
+            )
+    except (MissingApiKeyError, SimulationError) as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 2
+    _print_result(result, result.run_dir)
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    config = _build_config(args)
+    weather = _load_weather(config.scenario)
+    if weather is None:
+        return 2
+    try:
+        factories = {
+            name: _agent_factory(name, args.provider, args.model) for name in args.agents.split(",")
+        }
+    except MissingApiKeyError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 2
+    prefix = f"{datetime.now():%Y%m%d-%H%M%S}_{config.scenario}_cmp"
+    report = compare_agents(config, weather, factories, RUNS_DIR, prefix)
+    md = report.to_markdown()
+    print(md)
+    (RUNS_DIR / f"{prefix}.md").write_text(md, encoding="utf-8")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vmgs")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -89,6 +216,36 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--model", help="LLM_MODEL を上書き（例: qwen3:14b）")
     t.add_argument("--dry-run", action="store_true", help="Fake LLM で実行（APIキー不要）")
     t.set_defaults(func=cmd_turn)
+
+    def add_sim_options(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--scenario", default="heatwave", choices=["heatwave", "normal", "rainy"])
+        sp.add_argument(
+            "--preset",
+            choices=sorted(PRESETS),
+            help="気象+初期条件のプリセット（--scenario より優先）",
+        )
+        sp.add_argument("--hours", type=int, help="シミュレーション時間（既定: 24 / preset の値）")
+        sp.add_argument("--spot", choices=["A", "B", "C"])
+        sp.add_argument("--moisture", type=float, help="初期の土壌水分[%]")
+        sp.add_argument("--provider", choices=["openai", "anthropic", "ollama"])
+        sp.add_argument("--model")
+
+    r = sub.add_parser("run", help="24時間シミュレーションを実行する")
+    add_sim_options(r)
+    r.add_argument(
+        "--agent",
+        choices=["baseline", "noop", "llm"],
+        help="既定: baseline（--resume では記録済みの値）",
+    )
+    r.add_argument("--run-id")
+    r.add_argument("--stop-after", type=int, help="N ステップで中断する（--resume で再開できる）")
+    r.add_argument("--resume", metavar="RUN_ID", help="チェックポイントから再開する")
+    r.set_defaults(func=cmd_run)
+
+    c = sub.add_parser("compare", help="複数のエージェントを同じ気象で比較する")
+    add_sim_options(c)
+    c.add_argument("--agents", default="baseline,noop", help="カンマ区切り（baseline,noop,llm）")
+    c.set_defaults(func=cmd_compare)
     args = parser.parse_args(argv)
     return int(args.func(args))
 
