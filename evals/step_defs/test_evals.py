@@ -33,7 +33,7 @@ from vmgs.eval.trials import (
 pytestmark = pytest.mark.eval
 
 FEATURES = Path(__file__).resolve().parent.parent / "features"
-for _name in ("rain", "heat", "resources", "loop_guard"):
+for _name in ("rain", "heat", "resources", "loop_guard", "answer_format"):
     scenarios(str(FEATURES / f"{_name}.feature"))
 
 
