@@ -4,7 +4,13 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from vmgs.agent.graph import parse_decision
-from vmgs.agent.prompts import PROMPTS, SYSTEM_PROMPT, build_free_prompt
+from vmgs.agent.prompts import (
+    PLANNING_HINTS,
+    PROMPTS,
+    SYSTEM_PROMPT,
+    build_free_prompt,
+    build_hybrid_prompt,
+)
 from vmgs.experiment.configs import parse_config_spec
 from vmgs.world.params import Params
 
@@ -119,6 +125,35 @@ def _t_choice(name: str) -> None:
 def _t_spec(text: str, p: str, m: str, v: str) -> None:
     spec = parse_config_spec(text)
     assert (spec.provider, spec.model, spec.prompt) == (p, m, v)
+
+
+@when("hybrid プロンプトを生成する")
+def _w_build_hybrid(pc: PromptCtx) -> None:
+    pc.text = build_hybrid_prompt(pc.params)
+
+
+@then(parsers.parse('プロンプトから資源計画のヒントを取り除くと "{name}" と完全に一致する'))
+def _t_only_hints_differ(pc: PromptCtx, name: str) -> None:
+    assert PLANNING_HINTS in pc.text
+    assert pc.text.replace(PLANNING_HINTS, "") == PROMPTS[name]
+
+
+@then("資源計画のヒントに数字は含まれない")
+def _t_hints_no_digits(pc: PromptCtx) -> None:
+    import re
+
+    assert not re.search(r"[0-9０-９]", PLANNING_HINTS)
+
+
+@then("資源計画のヒントに次の語が含まれる")
+def _t_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
+    missing = [row[0] for row in datatable[1:] if row[0] not in PLANNING_HINTS]
+    assert not missing, missing
+
+
+@then(parsers.parse('構成 "{text}" の名前は "{name}" になる'))
+def _t_named_spec(text: str, name: str) -> None:
+    assert parse_config_spec(text).name == name
 
 
 @then(parsers.parse('構成の名前は "{name}" になる'))

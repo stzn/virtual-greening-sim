@@ -237,7 +237,27 @@ JSONは1つだけで、コードブロックは使わない:
 """
 
 
+# 資源計画のヒント。判断の閾値・具体的な量は与えず、考え方だけを伝える（数字を含めない。テストで検証する）。
+# free は、水が少ない状況で夜に水を使い切り、最も暑い時間に散水が INSUFFICIENT_WATER で失敗し、
+# 猛暑の日向から退避しなかった。そのときの失敗に対応する考え方だけを足す。
+PLANNING_HINTS = """\
+【資源の計画】
+- 水タンクとバッテリーは一日分である。いま使い切ると、あとで最も必要になったときに残っていない。残り時間と今後の天気（気温・日射のピーク、雨）から、いつ水が最も必要になるかを見通して、配分を考える。
+- 涼しい夜間や早朝は水分の減りが遅い。急いで散水せず、必要が大きくなる時間帯のために水を残す。
+- 散水の量は、水タンクの残量を超えて要求しない。水分が適正範囲に戻る程度に、必要な分だけ少しずつ足す。適正範囲にあるときの散水は、水の無駄になりやすい。
+- 暑い日向（A や C）では水分が早く減り、植物にも過酷である。日影（B）は水の減りが遅く、水が限られているときの退避先になる。ただし移動にもバッテリーと回数の制限があるので、効果が大きい時機を選ぶ。
+- 行動の前に、その行動で何が減り（水・バッテリー・移動の回数）、あとの時間に何が残るかを確かめる。
+
+"""
+
+
+def build_hybrid_prompt(params: Params | None = None) -> str:
+    """free に、資源計画のヒント（考え方のみ）を足したプロンプト。差分はヒントだけ。"""
+    return build_free_prompt(params).replace("【進め方】", PLANNING_HINTS + "【進め方】", 1)
+
+
 SYSTEM_PROMPT_FREE = build_free_prompt()
+SYSTEM_PROMPT_HYBRID = build_hybrid_prompt()
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
@@ -251,6 +271,7 @@ PROMPTS: dict[str, str] = {
     "v8": SYSTEM_PROMPT_V8,
     "v9": SYSTEM_PROMPT_V9,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
+    "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
 }
 
 
