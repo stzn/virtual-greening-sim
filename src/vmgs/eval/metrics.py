@@ -18,7 +18,18 @@ WASTED_MOVE_WINDOW_HOURS = 4  # 直前の移動の元へ、この時間以内に
 GUARD_ERROR_CODES = {"RECENT_REVERSAL", "MOVE_BUDGET_EXCEEDED"}
 
 # 要約が「行動していない」ことを述べている表現（宣言とはみなさない）
-_NEGATIONS = ("しない", "せず", "しなかった", "試み", "不要", "必要ない", "なし", "できな", "拒否")
+_NEGATIONS = (
+    "しない",
+    "せず",
+    "しなかった",
+    "試み",
+    "不要",
+    "必要ない",
+    "不可",
+    "なし",
+    "できな",
+    "拒否",
+)
 _MOVE_WORDS = ("移動", "退避")
 _IRRIGATE_WORDS = ("散水", "給水")
 

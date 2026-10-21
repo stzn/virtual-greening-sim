@@ -12,6 +12,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
 from vmgs.agent.fake import ScriptedChatModel, tool_call_message
 from vmgs.agent.llm import MissingApiKeyError, make_chat_model
+from vmgs.agent.prompts import PROMPTS, SYSTEM_PROMPT
 from vmgs.agent.protocol import AgentFactory
 from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
@@ -86,7 +87,9 @@ def cmd_turn(args: argparse.Namespace) -> int:
 RUNS_DIR = Path("runs")
 
 
-def _agent_factory(name: str, provider: str | None, model: str | None) -> AgentFactory:
+def _agent_factory(
+    name: str, provider: str | None, model: str | None, prompt: str | None = None
+) -> AgentFactory:
     if name == "baseline":
         return BaselineAgent
     if name == "noop":
@@ -97,7 +100,8 @@ def _agent_factory(name: str, provider: str | None, model: str | None) -> AgentF
     if model:
         overrides["llm_model"] = model
     chat = make_chat_model(Settings(**overrides))  # type: ignore[arg-type]
-    return lambda world: AgentRunner(chat, world)
+    system_prompt = PROMPTS[prompt] if prompt else SYSTEM_PROMPT
+    return lambda world: AgentRunner(chat, world, system_prompt=system_prompt)
 
 
 def _load_weather(scenario: str) -> SeriesWeather | None:
@@ -155,7 +159,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             weather = _load_weather(config.scenario)
             if weather is None:
                 return 2
-            factory = _agent_factory(args.agent or meta["agent"], args.provider, args.model)
+            factory = _agent_factory(
+                args.agent or meta["agent"], args.provider, args.model, args.prompt
+            )
             result = resume_simulation(
                 args.resume, RUNS_DIR, weather, factory, stop_after=args.stop_after
             )
@@ -165,7 +171,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             if weather is None:
                 return 2
             agent_name = args.agent or "baseline"
-            factory = _agent_factory(agent_name, args.provider, args.model)
+            factory = _agent_factory(agent_name, args.provider, args.model, args.prompt)
             run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M%S}_{config.scenario}_{agent_name}"
             result = run_simulation(
                 config,
@@ -206,7 +212,8 @@ def cmd_compare(args: argparse.Namespace) -> int:
         return 2
     try:
         factories = {
-            name: _agent_factory(name, args.provider, args.model) for name in args.agents.split(",")
+            name: _agent_factory(name, args.provider, args.model, args.prompt)
+            for name in args.agents.split(",")
         }
     except MissingApiKeyError as e:
         print(f"エラー: {e}", file=sys.stderr)
@@ -246,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--moisture", type=float, help="初期の土壌水分[%]")
         sp.add_argument("--provider", choices=["openai", "anthropic", "ollama"])
         sp.add_argument("--model")
+        sp.add_argument(
+            "--prompt", choices=sorted(PROMPTS), help="システムプロンプトのバージョン（既定: 最新）"
+        )
 
     r = sub.add_parser("run", help="24時間シミュレーションを実行する")
     add_sim_options(r)

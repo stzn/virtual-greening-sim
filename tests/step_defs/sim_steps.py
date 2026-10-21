@@ -415,6 +415,16 @@ def _w_count_rain(sc: SimCtx) -> None:
     sc.counted = count_irrigation_before_rain(sc.irrigation_times, sc.constant_weather)
 
 
+@given("旧形式の判断（要約崩れの記録なし）で本文が判断メモのあとにJSONの1件がある")
+def _g_legacy_with_json(sc: SimCtx) -> None:
+    raw = (
+        "#5: 土壌水分60%（30〜70%）、健康度100 → 何もしない\n\n"
+        '{"action_summary": "何もしない", "rationale": "#5 に該当", "risk_notes": ""}'
+    )
+    legacy = {"action_summary": raw, "rationale": raw}  # 旧パーサーは本文を両方に入れていた
+    sc.synthetic = [_step(1, TurnDecision.model_validate(legacy))]
+
+
 @when("保存済みの実行から指標を再計算する")
 def _w_recompute(sc: SimCtx) -> None:
     sc.recomputed = metrics_from_run(sc.last.run_dir, sc.require_weather())
@@ -636,6 +646,11 @@ def _t_malformed(sc: SimCtx, n: int) -> None:
 @then(parsers.parse("指標の宣言のみは {n:d} である"))
 def _t_unexecuted(sc: SimCtx, n: int) -> None:
     assert _metrics(sc).unexecuted_claims == n
+
+
+@then(parsers.parse('取り出し直した行動要約は "{text}" である'))
+def _t_reparsed_summary(sc: SimCtx, text: str) -> None:
+    assert sc.synthetic[0].decision.action_summary == text
 
 
 @then("再計算した指標は実行時の指標と一致する")

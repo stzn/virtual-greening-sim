@@ -85,3 +85,37 @@ def test_CLI_llmはAPIキーが無ければエラーで終了する(
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert cli.main(["run", "--scenario", "normal", "--agent", "llm", "--provider", "openai"]) == 2
     assert "OPENAI_API_KEY" in capsys.readouterr().err
+
+
+def test_CLI_promptで指定したバージョンのシステムプロンプトがLLMに渡る(
+    runs: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from langchain_core.messages import AIMessage
+
+    from vmgs.agent.fake import ScriptedChatModel
+    from vmgs.agent.prompts import PROMPTS
+
+    model = ScriptedChatModel(
+        responses=[AIMessage(content='{"action_summary": "何もしない"}')], cycle=True
+    )
+    monkeypatch.setattr(cli, "make_chat_model", lambda settings: model)
+    assert (
+        cli.main(
+            [
+                "run",
+                "--scenario",
+                "normal",
+                "--hours",
+                "2",
+                "--agent",
+                "llm",
+                "--prompt",
+                "v8",
+                "--run-id",
+                "p",
+            ]
+        )
+        == 0
+    )
+    assert model.inputs[0][0].content == PROMPTS["v8"]
+    assert PROMPTS["v8"] != PROMPTS["v9"]

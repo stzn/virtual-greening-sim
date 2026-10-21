@@ -28,6 +28,26 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_TURN = 8
 
 
+_DECODER = json.JSONDecoder()
+
+
+def _extract_decision_json(text: str) -> dict[str, Any] | None:
+    """本文中のJSONオブジェクトのうち、action_summary を持つ最後のものを返す。
+
+    最終回答は「判断メモのあとにJSONを1つ」の形を許す（行動ツールを呼ばないターンでは、
+    メモが最後のメッセージになるため）。コードブロックで囲まれていても拾える。
+    """
+    found: dict[str, Any] | None = None
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = _DECODER.raw_decode(text, m.start())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and "action_summary" in obj:
+            found = obj
+    return found
+
+
 class TurnDecision(BaseModel):
     action_summary: str = ""
     rationale: str = ""
@@ -40,13 +60,23 @@ class TurnDecision(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _infer_legacy_raw_fallback(cls, data: Any) -> Any:
-        """旧ログ互換: raw_fallback の記録が無く、要約と判断理由が同一なら要約崩れとみなす。
+        """旧ログ互換: raw_fallback の記録が無く、要約と判断理由が同一なら本文のフォールバックとみなす。
 
-        parse_decision のフォールバックは要約と判断理由に同じ本文を入れていたため。
+        旧パーサーは「全体がJSON」でないと本文をそのまま要約と判断理由に入れていた。
+        本文に（判断メモのあとの）JSONが含まれていれば取り出し直し、無ければ要約崩れとする。
         """
         if isinstance(data, dict) and "raw_fallback" not in data:
             summary = data.get("action_summary")
             if summary and summary == data.get("rationale"):
+                obj = _extract_decision_json(summary)
+                if obj is not None:
+                    return {
+                        **data,
+                        "raw_fallback": False,
+                        "action_summary": str(obj.get("action_summary", "")),
+                        "rationale": str(obj.get("rationale", "")),
+                        "risk_notes": str(obj.get("risk_notes", "")),
+                    }
                 return {**data, "raw_fallback": True}
         return data
 
@@ -72,26 +102,6 @@ def message_text(msg: AnyMessage) -> str:
         return c
     parts = [b if isinstance(b, str) else str(b.get("text", "")) for b in c]
     return "".join(parts)
-
-
-_DECODER = json.JSONDecoder()
-
-
-def _extract_decision_json(text: str) -> dict[str, Any] | None:
-    """本文中のJSONオブジェクトのうち、action_summary を持つ最後のものを返す。
-
-    最終回答は「判断メモのあとにJSONを1つ」の形を許す（行動ツールを呼ばないターンでは、
-    メモが最後のメッセージになるため）。コードブロックで囲まれていても拾える。
-    """
-    found: dict[str, Any] | None = None
-    for m in re.finditer(r"\{", text):
-        try:
-            obj, _ = _DECODER.raw_decode(text, m.start())
-        except json.JSONDecodeError:
-            continue
-        if isinstance(obj, dict) and "action_summary" in obj:
-            found = obj
-    return found
 
 
 def parse_decision(text: str) -> TurnDecision:
