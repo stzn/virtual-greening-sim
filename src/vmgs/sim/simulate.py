@@ -1,6 +1,8 @@
 """24時間タイムステップ・シミュレーション。時間を進めるのはここだけで、エージェントは進めない。"""
 
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +14,13 @@ from vmgs.agent.graph import TurnDecision
 from vmgs.agent.prompts import TurnSummary
 from vmgs.agent.protocol import AgentFactory, TurnAgent
 from vmgs.eval.metrics import Metrics, compute_metrics
+from vmgs.obs.telemetry import (
+    StepTelemetry,
+    summarize_telemetry,
+    trace_record,
+    usage_from_messages,
+)
+from vmgs.obs.tracing import build_run_config
 from vmgs.sim.records import Checkpoint, StepRecord, plant_from_dict, plant_to_dict
 from vmgs.sim.store import RunStore
 from vmgs.weather.providers import SeriesWeather, WeatherUnavailableError
@@ -23,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 HISTORY_TURNS = 3
 TERMINAL_REASONS = {"COMPLETED", "DEAD", "WEATHER_EXHAUSTED"}
+
+WallClock = Callable[[], float]  # 秒。テストでは差し替えて、レイテンシを決定論にする
 
 
 class SimulationError(Exception):
@@ -54,6 +65,19 @@ class SimulationResult:
     metrics: Metrics | None
 
 
+@dataclass
+class _Run:
+    """1回の実行（新規でも再開でも）に共通する文脈。"""
+
+    config: SimConfig
+    weather: SeriesWeather
+    store: RunStore
+    run_id: str
+    agent_info: dict[str, str]
+    clock: WallClock
+    stop_after: int | None
+
+
 def _build_world(config: SimConfig, weather: SeriesWeather, store: RunStore) -> World:
     assert config.start_time is not None
     world = World(
@@ -79,19 +103,28 @@ def run_simulation(
     run_id: str,
     *,
     agent_name: str = "custom",
+    agent_info: dict[str, str] | None = None,
     stop_after: int | None = None,
+    clock: WallClock = time.perf_counter,
 ) -> SimulationResult:
     start = config.start_time or weather.first_time.replace(hour=config.start_hour)
     config = config.model_copy(update={"start_time": start})
     store = RunStore(runs_dir / run_id)
     if store.exists():
         raise SimulationError("RUN_EXISTS", f"実行 {run_id!r} はすでに存在します")
+    info = dict(agent_info or {})
     store.init(
-        {"run_id": run_id, "agent": agent_name, "config": config.model_dump(mode="json")},
+        {
+            "run_id": run_id,
+            "agent": agent_name,
+            "agent_info": info,
+            "config": config.model_dump(mode="json"),
+        },
         title=f"{run_id}（{agent_name}）",
     )
     world = _build_world(config, weather, store)
-    return _loop(config, weather, world, agent_factory(world), store, run_id, [], [], stop_after)
+    run = _Run(config, weather, store, run_id, info, clock, stop_after)
+    return _loop(run, world, agent_factory(world), [], [])
 
 
 def resume_simulation(
@@ -101,12 +134,14 @@ def resume_simulation(
     agent_factory: AgentFactory,
     *,
     stop_after: int | None = None,
+    clock: WallClock = time.perf_counter,
 ) -> SimulationResult:
     """最後のチェックポイントから再開する。完了済みの実行は何もせず結果を返す。"""
     store = RunStore(runs_dir / run_id)
     if not store.exists():
         raise SimulationError("RUN_NOT_FOUND", f"実行 {run_id!r} が見つかりません")
-    config = SimConfig.model_validate(store.read_meta()["config"])
+    meta = store.read_meta()
+    config = SimConfig.model_validate(meta["config"])
     summary = store.read_summary()
     steps = store.read_steps()
     if summary is not None and summary["reason"] in TERMINAL_REASONS:
@@ -118,6 +153,7 @@ def resume_simulation(
     cp_step = store.latest_checkpoint_step()
     steps = steps[:cp_step]
     store.truncate_steps(cp_step)  # チェックポイントより先に書かれた分は捨てて整合させる
+    store.truncate_side_files(cp_step)
     world = _build_world(config, weather, store)
     history: list[TurnSummary] = []
     if cp_step > 0:
@@ -125,28 +161,24 @@ def resume_simulation(
         world.plant = plant_from_dict(cp.plant)
         world.clock.now = cp.sim_time
         history = cp.history
-    return _loop(
-        config, weather, world, agent_factory(world), store, run_id, steps, history, stop_after
-    )
+    run = _Run(config, weather, store, run_id, meta.get("agent_info", {}), clock, stop_after)
+    return _loop(run, world, agent_factory(world), steps, history)
 
 
 def _loop(
-    config: SimConfig,
-    weather: SeriesWeather,
+    run: _Run,
     world: World,
     agent: TurnAgent,
-    store: RunStore,
-    run_id: str,
     steps: list[StepRecord],
     history: list[TurnSummary],
-    stop_after: int | None,
 ) -> SimulationResult:
+    config, weather, store = run.config, run.weather, run.store
     reason = "COMPLETED"
     while len(steps) < config.hours:
         if world.plant.status is UnitStatus.DEAD:
             reason = "DEAD"
             break
-        if stop_after is not None and len(steps) >= stop_after:
+        if run.stop_after is not None and len(steps) >= run.stop_after:
             reason = "STOPPED"
             break
         try:
@@ -154,9 +186,11 @@ def _loop(
         except WeatherUnavailableError:
             reason = "WEATHER_EXHAUSTED"
             break
-        rec = _run_step(len(steps) + 1, world, agent, history)
+        rec, telemetry, trace = _run_step(len(steps) + 1, run, world, agent, history)
         steps.append(rec)
         store.append_step(rec)
+        store.append_telemetry(telemetry)
+        store.append_trace(trace)
         store.save_checkpoint(
             Checkpoint(
                 step=rec.step,
@@ -177,17 +211,31 @@ def _loop(
             "steps": len(steps),
             "final_state": final_state,
             "metrics": metrics.model_dump() if metrics else None,
+            "telemetry": summarize_telemetry(store.read_telemetry()).model_dump(),
         }
     )
-    return SimulationResult(run_id, store.dir, reason, steps, final_state, metrics)
+    return SimulationResult(run.run_id, store.dir, reason, steps, final_state, metrics)
 
 
-def _run_step(n: int, world: World, agent: TurnAgent, history: list[TurnSummary]) -> StepRecord:
+def _run_step(
+    n: int, run: _Run, world: World, agent: TurnAgent, history: list[TurnSummary]
+) -> tuple[StepRecord, StepTelemetry, dict[str, Any]]:
     before = world.state().model_dump(mode="json")
+    now = world.clock.now
     agent.history = list(history[-HISTORY_TURNS:])
+    agent.run_config = build_run_config(
+        run_id=run.run_id,
+        scenario=run.config.scenario,
+        step=n,
+        sim_time=now.isoformat(timespec="minutes"),
+        prompt_version=run.agent_info.get("prompt_version"),
+        model=run.agent_info.get("model"),
+    )
+    messages: list[Any] = []
+    t0 = run.clock()
     try:
         result = agent.run_turn()
-        decision, calls = result.decision, result.tool_calls
+        decision, calls, messages = result.decision, result.tool_calls, list(result.messages)
     except Exception as e:  # エージェントの失敗でシミュレーション全体を止めない
         logger.exception("ステップ %d の判断に失敗しました", n)
         decision = TurnDecision(
@@ -196,14 +244,25 @@ def _run_step(n: int, world: World, agent: TurnAgent, history: list[TurnSummary]
             error=f"{type(e).__name__}: {e}",
         )
         calls = []
-    now = world.clock.now
+    latency = run.clock() - t0
     world.advance(1)  # 時間を進めるのはランナーだけ
     history.append(TurnSummary(time=f"{now:%H:%M}", action_summary=decision.action_summary))
-    return StepRecord(
+    when = now.isoformat(timespec="minutes")
+    usage = usage_from_messages(messages)
+    rec = StepRecord(
         step=n,
-        time=now.isoformat(timespec="minutes"),
+        time=when,
         state_before=before,
         state_after=world.state().model_dump(mode="json"),
         tool_calls=calls,
         decision=decision,
     )
+    telemetry = StepTelemetry(
+        step=n,
+        latency_s=latency,
+        llm_calls=usage.llm_calls,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        total_tokens=usage.total_tokens,
+    )
+    return rec, telemetry, trace_record(n, when, messages)

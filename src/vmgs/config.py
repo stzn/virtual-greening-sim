@@ -15,3 +15,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     # Qwen3 等の思考(thinking)モード。有効だと1呼び出し数十秒かかるため既定はオフ
     ollama_reasoning: bool = False
+
+    # LangSmith（外部サービスへ送信する。既定はオフ。obs/tracing.py で解決する）
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = None
+    langsmith_project: str = "vmgs"

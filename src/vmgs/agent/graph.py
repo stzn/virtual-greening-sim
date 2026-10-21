@@ -14,7 +14,13 @@ import re
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    BaseMessage,
+    HumanMessage,
+    ToolMessage,
+)
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -101,7 +107,7 @@ class AgentState(TypedDict):
     decision: TurnDecision | None
 
 
-def message_text(msg: AnyMessage) -> str:
+def message_text(msg: AnyMessage | BaseMessage) -> str:
     """content が文字列でもブロック列でもテキストを取り出す。"""
     c = msg.content
     if isinstance(c, str):

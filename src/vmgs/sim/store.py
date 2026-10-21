@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from vmgs.obs.telemetry import StepTelemetry
 from vmgs.sim.records import Checkpoint, StepRecord
 
 
@@ -17,6 +18,8 @@ class RunStore:
         self.steps_path = run_dir / "steps.jsonl"
         self.summary_path = run_dir / "summary.json"
         self.notes_path = run_dir / "research_notes.md"
+        self.telemetry_path = run_dir / "telemetry.jsonl"
+        self.traces_path = run_dir / "traces.jsonl"
         self.checkpoint_dir = run_dir / "checkpoints"
 
     def exists(self) -> bool:
@@ -26,6 +29,8 @@ class RunStore:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
         self.steps_path.write_text("", encoding="utf-8")
+        self.telemetry_path.write_text("", encoding="utf-8")
+        self.traces_path.write_text("", encoding="utf-8")
         self.notes_path.write_text(f"# 研究ログ: {title}\n\n", encoding="utf-8")
 
     def read_meta(self) -> dict[str, Any]:
@@ -44,6 +49,34 @@ class RunStore:
     def truncate_steps(self, n: int) -> None:
         lines = self.steps_path.read_text(encoding="utf-8").splitlines()[:n]
         self.steps_path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
+
+    # --- テレメトリ・トレース（steps.jsonl とは別。再現性を損なわない） ---
+    def append_telemetry(self, rec: StepTelemetry) -> None:
+        with self.telemetry_path.open("a", encoding="utf-8") as f:
+            f.write(rec.model_dump_json() + "\n")
+
+    def read_telemetry(self) -> list[StepTelemetry]:
+        if not self.telemetry_path.exists():
+            return []
+        lines = self.telemetry_path.read_text(encoding="utf-8").splitlines()
+        return [StepTelemetry.model_validate_json(line) for line in lines if line.strip()]
+
+    def append_trace(self, rec: dict[str, Any]) -> None:
+        with self.traces_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+    def read_traces(self) -> list[dict[str, Any]]:
+        if not self.traces_path.exists():
+            return []
+        lines = self.traces_path.read_text(encoding="utf-8").splitlines()
+        return [json.loads(line) for line in lines if line.strip()]
+
+    def truncate_side_files(self, n: int) -> None:
+        """再開時、チェックポイントより先に書かれた分を捨てて steps と揃える。"""
+        for path in (self.telemetry_path, self.traces_path):
+            if path.exists():
+                lines = path.read_text(encoding="utf-8").splitlines()[:n]
+                path.write_text("".join(line + "\n" for line in lines), encoding="utf-8")
 
     # --- checkpoints ---
     def _cp_path(self, step: int) -> Path:

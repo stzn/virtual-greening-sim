@@ -1,7 +1,10 @@
 """1ターン分の入力を組み立ててグラフを実行し、判断要約を次ターンへ引き継ぐ。"""
 
+from typing import Any, cast
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, ConfigDict
 
 from vmgs.agent.graph import (
@@ -41,6 +44,7 @@ class AgentRunner:
         self.max_tool_calls = max_tool_calls
         self.history_turns = history_turns
         self.history: list[TurnSummary] = []
+        self.run_config: dict[str, Any] = {}  # トレース用（run_name / tags / metadata）
         self._graph = build_turn_graph(model, ToolBox(world), max_tool_calls=max_tool_calls)
 
     def run_turn(self) -> TurnResult:
@@ -61,7 +65,10 @@ class AgentRunner:
             "retry_requested": False,
             "decision": None,
         }
-        final = self._graph.invoke(init, config={"recursion_limit": self.max_tool_calls * 2 + 10})
+        config = cast(
+            RunnableConfig, {**self.run_config, "recursion_limit": self.max_tool_calls * 2 + 10}
+        )
+        final = self._graph.invoke(init, config=config)
         decision = final["decision"]
         assert decision is not None
         self.history.append(

@@ -25,6 +25,7 @@ class NoopAgent:
 
     def __init__(self, world: World) -> None:
         self.history: list[TurnSummary] = []
+        self.run_config: dict[str, Any] = {}
 
     def run_turn(self) -> TurnResult:
         return TurnResult(
@@ -40,6 +41,7 @@ class BaselineAgent:
     def __init__(self, world: World) -> None:
         self.toolbox = ToolBox(world)
         self.history: list[TurnSummary] = []
+        self.run_config: dict[str, Any] = {}
 
     def run_turn(self) -> TurnResult:
         calls: list[ToolCallRecord] = []

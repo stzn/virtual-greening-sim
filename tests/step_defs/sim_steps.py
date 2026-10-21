@@ -2,17 +2,20 @@
 
 import itertools
 import json
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
+from langchain_core.messages import AIMessage
 from pytest_bdd import given, parsers, then, when
 
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
+from vmgs.agent.fake import ScriptedChatModel
 from vmgs.agent.graph import ToolCallRecord, TurnDecision
-from vmgs.agent.protocol import AgentFactory
-from vmgs.agent.runner import TurnResult
+from vmgs.agent.protocol import AgentFactory, TurnAgent
+from vmgs.agent.runner import AgentRunner, TurnResult
 from vmgs.eval.metrics import (
     Metrics,
     MoveEvent,
@@ -27,6 +30,7 @@ from vmgs.sim.simulate import (
     SimConfig,
     SimulationError,
     SimulationResult,
+    WallClock,
     resume_simulation,
     run_simulation,
 )
@@ -78,6 +82,9 @@ class SimCtx:
         self.metrics: Metrics | None = None
         self.report: ComparisonReport | None = None
         self.synthetic: list[StepRecord] = []
+        self.clock: WallClock = time.perf_counter
+        self.agent_info: dict[str, str] = {}
+        self.run_configs: list[dict[str, Any]] = []
 
     def require_weather(self) -> SeriesWeather:
         assert self.weather is not None
@@ -97,7 +104,9 @@ class SimCtx:
                 self.factory,
                 self.runs_dir,
                 run_id,
+                agent_info=self.agent_info or None,
                 stop_after=stop_after,
+                clock=self.clock,
             )
         except Exception as e:  # 「例外は発生しない」を検証するため保持する
             self.error = e
@@ -106,7 +115,9 @@ class SimCtx:
         return res
 
     def resume(self, run_id: str) -> SimulationResult:
-        return resume_simulation(run_id, self.runs_dir, self.require_weather(), self.factory)
+        return resume_simulation(
+            run_id, self.runs_dir, self.require_weather(), self.factory, clock=self.clock
+        )
 
     @property
     def last(self) -> SimulationResult:
@@ -155,6 +166,46 @@ def _pingpong(world_holder: list[World]) -> AgentFactory:
             )
 
     return PingPong
+
+
+class StepClock:
+    """1ステップの判断に seconds 秒かかったように見せる時計（ランナーは1ステップで2回だけ呼ぶ）。"""
+
+    def __init__(self, seconds: float) -> None:
+        self.seconds = seconds
+        self.n = 0
+
+    def __call__(self) -> float:
+        v = (self.n // 2) * 1000.0 + (self.n % 2) * self.seconds
+        self.n += 1
+        return v
+
+
+def _run_config_recording(store: list[dict[str, Any]]) -> AgentFactory:
+    class Recorder(NoopAgent):
+        def run_turn(self) -> TurnResult:
+            store.append(json.loads(json.dumps(self.run_config)))  # その時点の値を保存
+            return super().run_turn()
+
+    return Recorder
+
+
+def _numbered_llm() -> AgentFactory:
+    """毎ターン『要約k』(k=時間目)をJSONで返すLLMエージェント。再開しても番号が続く。"""
+
+    def make(world: World) -> TurnAgent:
+        start = world.clock.now.hour
+        responses = [
+            AIMessage(
+                content=json.dumps(
+                    {"action_summary": f"要約{k}", "rationale": "r"}, ensure_ascii=False
+                )
+            )
+            for k in range(start + 1, 25)
+        ]
+        return AgentRunner(ScriptedChatModel(responses=responses), world)
+
+    return make
 
 
 def _time_recording(times: list[datetime]) -> AgentFactory:
@@ -222,6 +273,36 @@ def _g_failing(sc: SimCtx, n: int) -> None:
 @given("毎時 A と B を行き来しようとするエージェントを使う")
 def _g_pingpong(sc: SimCtx) -> None:
     sc.factory = _pingpong([])
+
+
+@given("トレース用の実行情報を記録するエージェントを使う")
+def _g_run_config_agent(sc: SimCtx) -> None:
+    sc.factory = _run_config_recording(sc.run_configs)
+
+
+@given("毎ターン固有の要約をJSONで返すLLMエージェントを使う")
+def _g_numbered_llm(sc: SimCtx) -> None:
+    sc.factory = _numbered_llm()
+
+
+@given(parsers.parse('エージェント情報としてプロンプト "{v}" とモデル "{m}" が設定されている'))
+def _g_agent_info(sc: SimCtx, v: str, m: str) -> None:
+    sc.agent_info = {"prompt_version": v, "model": m}
+
+
+@given(parsers.parse("1回の判断に {s:g} 秒かかる時計を使う"))
+def _g_clock(sc: SimCtx, s: float) -> None:
+    sc.clock = StepClock(float(s))
+
+
+@when(
+    parsers.parse(
+        "1回の判断に {s:g} 秒かかる時計に替えて同じ条件でもう一度 {n:d}時間シミュレーションする"
+    )
+)
+def _w_clock_rerun(sc: SimCtx, s: float, n: int) -> None:
+    sc.clock = StepClock(float(s))
+    sc.run(n)
 
 
 @given("呼び出されるたびに仮想時刻を記録するエージェントを使う")
@@ -568,11 +649,12 @@ def _t_lacks_summary(sc: SimCtx, k: int, a: int) -> None:
     assert f"要約{a}" not in sc.seen[k]
 
 
-@then(parsers.parse("実行ディレクトリに steps.jsonl が {n:d} 行ある"))
-def _t_jsonl_lines(sc: SimCtx, n: int) -> None:
-    lines = (sc.last.run_dir / "steps.jsonl").read_text(encoding="utf-8").splitlines()
+@then(parsers.parse("実行ディレクトリに {name} が {n:d} 行ある"))
+def _t_file_lines(sc: SimCtx, name: str, n: int) -> None:
+    lines = (sc.last.run_dir / name).read_text(encoding="utf-8").splitlines()
     assert len(lines) == n
-    assert all(json.loads(line)["decision"] is not None for line in lines)
+    if name == "steps.jsonl":
+        assert all(json.loads(line)["decision"] is not None for line in lines)
 
 
 @then(parsers.parse("実行ディレクトリに {name} がある"))
