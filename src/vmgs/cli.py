@@ -12,12 +12,17 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
 from vmgs.agent.fake import ScriptedChatModel, tool_call_message
 from vmgs.agent.llm import MissingApiKeyError, make_chat_model
-from vmgs.agent.prompts import PROMPTS, SYSTEM_PROMPT
-from vmgs.agent.protocol import AgentFactory
+from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+from vmgs.agent.protocol import AgentFactory, TurnAgent
 from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
 from vmgs.eval.metrics import Metrics, metrics_from_run
 from vmgs.eval.report import ComparisonReport, compare_agents, plot_run
+from vmgs.experiment.configs import ConfigSpec, parse_config_spec
+from vmgs.experiment.runner import ExperimentSpec, run_experiment
+from vmgs.experiment.variants import BaseConditions
+from vmgs.obs.telemetry import estimate_cost_usd, summarize_telemetry
+from vmgs.obs.tracing import apply_tracing, resolve_tracing
 from vmgs.sim.presets import PRESETS
 from vmgs.sim.simulate import SimConfig, SimulationError, resume_simulation, run_simulation
 from vmgs.sim.store import RunStore
@@ -87,6 +92,15 @@ def cmd_turn(args: argparse.Namespace) -> int:
 RUNS_DIR = Path("runs")
 
 
+def _llm_settings(provider: str | None, model: str | None) -> Settings:
+    overrides: dict[str, str] = {}
+    if provider:
+        overrides["llm_provider"] = provider
+    if model:
+        overrides["llm_model"] = model
+    return Settings(**overrides)  # type: ignore[arg-type]
+
+
 def _agent_factory(
     name: str, provider: str | None, model: str | None, prompt: str | None = None
 ) -> AgentFactory:
@@ -94,14 +108,34 @@ def _agent_factory(
         return BaselineAgent
     if name == "noop":
         return NoopAgent
-    overrides: dict[str, str] = {}
-    if provider:
-        overrides["llm_provider"] = provider
-    if model:
-        overrides["llm_model"] = model
-    chat = make_chat_model(Settings(**overrides))  # type: ignore[arg-type]
+    chat = make_chat_model(_llm_settings(provider, model))
     system_prompt = PROMPTS[prompt] if prompt else SYSTEM_PROMPT
     return lambda world: AgentRunner(chat, world, system_prompt=system_prompt)
+
+
+def _agent_info(
+    name: str, provider: str | None, model: str | None, prompt: str | None
+) -> dict[str, str] | None:
+    """実行の設定(run.json)とトレースのメタデータに残す、LLMの識別情報。"""
+    if name in ("baseline", "noop"):
+        return None
+    settings = _llm_settings(provider, model)
+    return {
+        "provider": settings.llm_provider,
+        "model": settings.llm_model,
+        "prompt_version": prompt or PROMPT_VERSION,
+    }
+
+
+def _setup_tracing(args: argparse.Namespace) -> None:
+    """--trace のときだけ LangSmith へ送る。何が送られるかを必ず表示する。"""
+    if not getattr(args, "trace", False):
+        return
+    cfg = resolve_tracing(Settings(), enable=True, project=getattr(args, "trace_project", None))
+    print(cfg.describe(), file=sys.stderr)
+    for w in cfg.warnings:
+        print(f"警告: {w}", file=sys.stderr)
+    apply_tracing(cfg)
 
 
 def _load_weather(scenario: str) -> SeriesWeather | None:
@@ -145,6 +179,7 @@ def _print_result(result: object, run_dir: Path) -> None:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    _setup_tracing(args)
     try:
         if args.resume:
             meta = (
@@ -180,6 +215,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 RUNS_DIR,
                 run_id,
                 agent_name=agent_name,
+                agent_info=_agent_info(agent_name, args.provider, args.model, args.prompt),
                 stop_after=args.stop_after,
             )
     except (MissingApiKeyError, SimulationError) as e:
@@ -203,6 +239,94 @@ def cmd_metrics(args: argparse.Namespace) -> int:
         rows[run_id] = metrics_from_run(store.dir, _load_weather(config.scenario))
     print(ComparisonReport(scenario=scenario, rows=rows).to_markdown())
     return 0
+
+
+def cmd_telemetry(args: argparse.Namespace) -> int:
+    """保存済みの実行のトークン・レイテンシ・コスト概算を表示する。"""
+    for run_id in args.run_ids:
+        store = RunStore(RUNS_DIR / run_id)
+        if not store.exists():
+            print(f"エラー: 実行 {run_id!r} が見つかりません", file=sys.stderr)
+            return 2
+        rows = store.read_telemetry()
+        if not rows:
+            print(f"{run_id}: テレメトリがありません（旧形式の実行）")
+            continue
+        s = summarize_telemetry(rows)
+        reported = [r for r in rows if r.total_tokens is not None]
+        tokens = f"{s.total_tokens}" if reported else "報告なし"
+        info = store.read_meta().get("agent_info") or {}
+        cost = "－"
+        if s.llm_calls and info.get("model") and reported:
+            usd = estimate_cost_usd(
+                info["model"],
+                sum(r.input_tokens or 0 for r in rows),
+                sum(r.output_tokens or 0 for r in rows),
+                provider=info.get("provider"),
+            )
+            cost = "不明（単価表に無いモデル）" if usd is None else f"約 ${usd:.4f}"
+        print(
+            f"{run_id}: {s.steps}ステップ / LLM呼び出し {s.llm_calls} / トークン {tokens} / "
+            f"合計 {s.total_latency_s:.1f}秒（平均 {s.mean_latency_s:.1f}・p95 {s.p95_latency_s:.1f}）/ コスト {cost}"
+        )
+    return 0
+
+
+def _experiment_specs(args: argparse.Namespace) -> dict[str, ConfigSpec]:
+    return {spec.name: spec for spec in (parse_config_spec(t) for t in args.configs.split(","))}
+
+
+def cmd_experiment(args: argparse.Namespace) -> int:
+    _setup_tracing(args)
+    base_config = _build_config(args)
+    weather = _load_weather(base_config.scenario)
+    if weather is None:
+        return 2
+    try:
+        specs = _experiment_specs(args)
+    except ValueError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 2
+    configs: dict[str, AgentFactory] = {}
+    infos: dict[str, dict[str, str]] = {}
+    for name, spec in specs.items():
+        if spec.kind == "llm":
+            # モデルの生成は実行時まで遅らせる（APIキー未設定などは、その構成だけの失敗として記録される）
+            configs[name] = _lazy_llm_factory(spec)
+            infos[name] = _agent_info("llm", spec.provider, spec.model, spec.prompt) or {}
+        else:
+            configs[name] = _agent_factory(spec.kind, None, None)
+    base = BaseConditions(
+        moisture=base_config.initial_moisture if base_config.initial_moisture is not None else 60.0,
+        tank_ml=base_config.initial_tank_ml if base_config.initial_tank_ml is not None else 10_000,
+        battery_pct=100.0,
+        spot=base_config.spot,
+        start_hour=base_config.start_hour,
+    )
+    name = args.name or f"{datetime.now():%Y%m%d-%H%M%S}_{base_config.scenario}_exp"
+    exp_spec = ExperimentSpec(
+        name=name,
+        scenario=base_config.scenario,
+        configs=configs,
+        variants=args.variants,
+        seed=args.seed,
+        hours=base_config.hours,
+        base=base,
+        agent_infos=infos,
+    )
+    result = run_experiment(exp_spec, weather, RUNS_DIR, max_runs=args.max_runs)
+    print(result.report_md)
+    print(
+        f"保存先: {result.experiment_dir}（experiment.json / report.md）。各実行は runs/{name}_<構成>_v<番号>/"
+    )
+    return 0
+
+
+def _lazy_llm_factory(spec: ConfigSpec) -> AgentFactory:
+    def make(world: World) -> TurnAgent:
+        return _agent_factory("llm", spec.provider, spec.model, spec.prompt)(world)
+
+    return make
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
@@ -268,6 +392,37 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--stop-after", type=int, help="N ステップで中断する（--resume で再開できる）")
     r.add_argument("--resume", metavar="RUN_ID", help="チェックポイントから再開する")
     r.set_defaults(func=cmd_run)
+
+    r.add_argument(
+        "--trace",
+        action="store_true",
+        help="LangSmith へトレースを送る（要 APIキー。プロンプトと応答が外部へ送られる）",
+    )
+    r.add_argument("--trace-project", help="LangSmith のプロジェクト名（既定: vmgs）")
+
+    tl = sub.add_parser(
+        "telemetry", help="保存済みの実行のトークン・レイテンシ・コスト概算を表示する"
+    )
+    tl.add_argument("run_ids", nargs="+", metavar="RUN_ID")
+    tl.set_defaults(func=cmd_telemetry)
+
+    ex = sub.add_parser("experiment", help="複数の構成を、初期条件を変えたバリアントで比較する")
+    add_sim_options(ex)
+    ex.add_argument(
+        "--name",
+        help="実験名（既定: 日時_シナリオ_exp）。同じ名前なら完了済みの実行を再利用して再開する",
+    )
+    ex.add_argument(
+        "--configs",
+        default="baseline,noop",
+        help="カンマ区切り。baseline / noop / llm:<provider>:<model>[:v数字]",
+    )
+    ex.add_argument("--variants", type=int, default=5)
+    ex.add_argument("--seed", type=int, default=0)
+    ex.add_argument("--max-runs", type=int, help="この呼び出しで新たに実行する件数の上限")
+    ex.add_argument("--trace", action="store_true", help="LangSmith へトレースを送る")
+    ex.add_argument("--trace-project")
+    ex.set_defaults(func=cmd_experiment)
 
     mt = sub.add_parser("metrics", help="保存済みの実行から指標を再計算して並べる")
     mt.add_argument("run_ids", nargs="+", metavar="RUN_ID")
