@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from pytest_bdd import given, parsers, then, when
 
+from tests.step_defs.policies import POLICIES
 from tests.step_defs.sim_steps import SimCtx
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
 from vmgs.agent.protocol import AgentFactory, TurnAgent
@@ -17,13 +18,20 @@ from vmgs.experiment.runner import (
     ExperimentResult,
     ExperimentSpec,
     Stat,
+    SuiteResult,
     aggregate_metrics,
     compare_paired,
     run_experiment,
+    run_suite,
 )
+from vmgs.experiment.stress import STRESS_SUITE, Condition
 from vmgs.experiment.variants import BaseConditions
 from vmgs.sim.store import RunStore
+from vmgs.weather.cache import load_records
+from vmgs.weather.providers import SeriesWeather
 from vmgs.world.world import World
+
+DATA = Path(__file__).resolve().parents[2] / "data" / "weather"
 
 
 def _metrics(final_health: float) -> Metrics:
@@ -62,6 +70,9 @@ class ExCtx:
         self.paired: dict[str, dict[int, float]] = {}
         self.stats: dict[str, dict[str, Stat]] = {}
         self.pair_results: dict[str, tuple[int, int, int]] = {}
+        self.condition: Condition | None = None
+        self.suite_results: list[SuiteResult] = []
+        self._suite_mode = False
 
     def _counting(self, factory: AgentFactory) -> AgentFactory:
         def make(world: World) -> TurnAgent:
@@ -73,31 +84,66 @@ class ExCtx:
     def factory_for(self, cfg: str) -> AgentFactory:
         if cfg in self.factories:
             return self._counting(self.factories[cfg])
+        if cfg in POLICIES:
+            return self._counting(POLICIES[cfg])
         return self._counting(NoopAgent if cfg == "noop" else BaselineAgent)
 
+    def weather_for(self, scenario: str) -> SeriesWeather:
+        """状況（ストレス状況・スイート）は気象シナリオを自分で持つ。通常の実験は Background の気象を使う。"""
+        if self.condition is not None or self._suite_mode:
+            return SeriesWeather(load_records(DATA / f"{scenario}.json"))
+        return self.sc.require_weather()
+
     def spec(self) -> ExperimentSpec:
+        cond = self.condition
         return ExperimentSpec(
             name=self.name,
-            scenario=self.sc.scenario,
+            scenario=cond.scenario if cond else self.sc.scenario,
             configs={c: self.factory_for(c) for c in self.configs},
             variants=self.variants,
             seed=self.seed,
-            base=BaseConditions(),
+            hours=cond.hours if cond else 24,
+            base=cond.base if cond else BaseConditions(),
         )
 
     def run(self, **kwargs: Any) -> ExperimentResult:
         self.sc.error = None
         try:
-            res = run_experiment(self.spec(), self.sc.require_weather(), self.sc.runs_dir, **kwargs)
+            spec = self.spec()
+            res = run_experiment(spec, self.weather_for(spec.scenario), self.sc.runs_dir, **kwargs)
         except Exception as e:
             self.sc.error = e
             raise
         self.results.append(res)
         return res
 
+    def run_suite(self, **kwargs: Any) -> SuiteResult:
+        self._suite_mode = True
+        self.sc.error = None
+        try:
+            res = run_suite(
+                self.name,
+                list(STRESS_SUITE.values()),
+                {c: self.factory_for(c) for c in self.configs},
+                self.weather_for,
+                self.sc.runs_dir,
+                variants=self.variants,
+                seed=self.seed,
+                **kwargs,
+            )
+        except Exception as e:
+            self.sc.error = e
+            raise
+        self.suite_results.append(res)
+        return res
+
     @property
     def last(self) -> ExperimentResult:
         return self.results[-1]
+
+    @property
+    def last_suite(self) -> SuiteResult:
+        return self.suite_results[-1]
 
 
 @pytest.fixture
@@ -339,3 +385,163 @@ def _t_experiment_json(ex: ExCtx, s: int, a: str, b: str, n: int, sc: str) -> No
     assert data["configs"] == [a, b]
     assert data["variants"] == n
     assert data["scenario"] == sc
+
+
+# ================= ストレス状況 =================
+@given(parsers.parse('ストレス状況 "{c}" を使う'))
+def _g_condition(ex: ExCtx, c: str) -> None:
+    ex.condition = STRESS_SUITE[c]
+
+
+@when(parsers.parse('ストレス状況 "{c}" を取得する'))
+def _w_get_condition(ex: ExCtx, c: str) -> None:
+    ex.condition = STRESS_SUITE[c]
+
+
+@then(
+    parsers.parse(
+        '気象は "{w}" で {h:d} 時間・土壌水分 {m:g}%・水タンク {t:d}ml・スポット "{s}"・{start:d}時開始である'
+    )
+)
+def _t_condition_def(ex: ExCtx, w: str, h: int, m: float, t: int, s: str, start: int) -> None:
+    cond = ex.condition
+    assert cond is not None
+    assert (cond.scenario, cond.hours) == (w, h)
+    assert (cond.base.moisture, cond.base.tank_ml, cond.base.spot, cond.base.start_hour) == (
+        float(m),
+        t,
+        s,
+        start,
+    )
+
+
+@when(parsers.parse('ストレス状況 "{c}" で {names} をバリアント {n:d} 件で実行する'))
+def _w_run_condition(ex: ExCtx, c: str, names: str, n: int) -> None:
+    ex.condition = STRESS_SUITE[c]
+    ex.configs = _quoted(names)
+    ex.variants = n
+    ex.name = f"st_{c}"
+    ex.run()
+
+
+def _final_health(ex: ExCtx, cfg: str) -> Stat:
+    return ex.last.stats[cfg]["final_health"]
+
+
+@then(parsers.parse('"{c}" の最終健康度の平均は {v:g} 未満である'))
+def _t_mean_below(ex: ExCtx, c: str, v: float) -> None:
+    assert _final_health(ex, c).mean < v
+
+
+@then(parsers.parse('"{c}" の最終健康度の標準偏差は {v:g} 以上である'))
+def _t_std_at_least(ex: ExCtx, c: str, v: float) -> None:
+    std = _final_health(ex, c).std
+    assert std is not None
+    assert std >= v
+
+
+@then(parsers.parse('"{x}" は "{b}" に対して 勝ち {w:d}・引き分け {t:d}・負け {lo:d} である'))
+def _t_pair_stress(ex: ExCtx, x: str, b: str, w: int, t: int, lo: int) -> None:
+    assert ex.last.baseline == b
+    assert ex.last.pairs[x] == (w, t, lo)
+
+
+@then(parsers.parse('"{x}" の最終健康度の平均は "{b}" より {v:g} 以上高い'))
+def _t_higher(ex: ExCtx, x: str, b: str, v: float) -> None:
+    assert _final_health(ex, x).mean - _final_health(ex, b).mean >= v
+
+
+@then(parsers.parse('"{x}" の最終健康度の平均は "{b}" より {v:g} 以上低い'))
+def _t_lower(ex: ExCtx, x: str, b: str, v: float) -> None:
+    assert _final_health(ex, b).mean - _final_health(ex, x).mean >= v
+
+
+# ================= スイート =================
+@given(parsers.parse('スイート "{name}" の構成は {names} で、バリアントは {n:d} 件である'))
+@given(parsers.parse('スイート "{name}" の構成は {names} で、バリアントは {n:d} 件である'))
+def _g_suite(ex: ExCtx, name: str, names: str, n: int) -> None:
+    ex.name, ex.configs, ex.variants = name, _quoted(names), n
+
+
+@given(parsers.parse("スイートのシードは {s:d} である"))
+def _g_suite_seed(ex: ExCtx, s: int) -> None:
+    ex.seed = s
+
+
+@when("スイートを実行する")
+def _w_suite(ex: ExCtx) -> None:
+    ex.run_suite()
+
+
+@when(parsers.parse("スイートを {k:d} 件の実行で打ち切る"))
+def _w_suite_limited(ex: ExCtx, k: int) -> None:
+    ex.run_suite(max_runs=k)
+
+
+@then(parsers.parse("実行は {n:d} 件で、実行IDに次が含まれる"))
+def _t_suite_ids(ex: ExCtx, datatable: list[list[str]]) -> None:
+    ids = {o.run_id for res in ex.last_suite.conditions.values() for o in res.outcomes}
+    assert len(ids) == 16
+    for row in datatable[1:]:
+        assert row[0] in ids, row[0]
+        assert (ex.sc.runs_dir / row[0] / "run.json").exists()
+
+
+@then(parsers.parse("スイートの要約に状況 {names} の表がそれぞれある"))
+def _t_suite_tables(ex: ExCtx, names: str) -> None:
+    md = ex.last_suite.summary_md
+    for n in _quoted(names):
+        assert f"### {n}（" in md
+
+
+@then(parsers.parse('状況 "{c1}" の "{g1}" の最終健康度の平均は 状況 "{c2}" の "{g2}" と異なる'))
+def _t_not_averaged(ex: ExCtx, c1: str, g1: str, c2: str, g2: str) -> None:
+    res = ex.last_suite.conditions
+    assert res[c1].stats[g1]["final_health"].mean != res[c2].stats[g2]["final_health"].mean
+
+
+@then(
+    parsers.parse(
+        '全状況の合計で "{x}" は "{b}" に対して 勝ち {w:d}・引き分け {t:d}・負け {lo:d} である'
+    )
+)
+def _t_suite_totals(ex: ExCtx, x: str, b: str, w: int, t: int, lo: int) -> None:
+    assert ex.last_suite.baseline == b
+    assert ex.last_suite.totals[x] == (w, t, lo)
+
+
+@then("スイートの要約に全状況の合計の対比較が含まれる")
+def _t_suite_summary_totals(ex: ExCtx) -> None:
+    assert "全状況の合計" in ex.last_suite.summary_md
+
+
+@then(parsers.parse("スイートの実行は {n:d} 件が完了している"))
+def _t_suite_completed(ex: ExCtx, n: int) -> None:
+    done = sum(
+        1 for r in ex.last_suite.conditions.values() for o in r.outcomes if o.status == "COMPLETED"
+    )
+    assert done == n
+
+
+@then(parsers.parse('全ての状況で構成 "{c}" は {n:d} 件完了している'))
+def _t_all_completed(ex: ExCtx, c: str, n: int) -> None:
+    assert all(len(r.completed(c)) == n for r in ex.last_suite.conditions.values())
+
+
+@then(parsers.parse('全ての状況で構成 "{c}" は失敗として記録されている'))
+def _t_all_failed(ex: ExCtx, c: str) -> None:
+    assert len(ex.last_suite.conditions) == len(STRESS_SUITE)
+    assert all(c in r.failed for r in ex.last_suite.conditions.values())
+
+
+@then(
+    parsers.parse(
+        'suite.json にシード {s:d}・状況 {k:d} 件・構成 "{a}" "{b}"・バリアント数 {n:d} が記録されている'
+    )
+)
+def _t_suite_json(ex: ExCtx, s: int, k: int, a: str, b: str, n: int) -> None:
+    data = json.loads((ex.sc.runs_dir / ex.name / "suite.json").read_text(encoding="utf-8"))
+    assert data["seed"] == s
+    assert len(data["conditions"]) == k
+    assert data["configs"] == [a, b]
+    assert data["variants"] == n

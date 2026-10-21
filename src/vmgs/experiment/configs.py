@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 
 PROVIDERS = {"openai", "anthropic", "ollama"}
-_PROMPT = re.compile(r"v\d+")
+_PROMPT = re.compile(r"v\d+|free")
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ class ConfigSpec:
 
 
 def parse_config_spec(text: str) -> ConfigSpec:
-    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字ならプロンプト。"""
+    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 または free ならプロンプト。"""
     if text in ("baseline", "noop", "llm"):
         return ConfigSpec(text)
     tokens = text.split(":")

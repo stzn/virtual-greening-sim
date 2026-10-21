@@ -19,7 +19,8 @@ from vmgs.config import Settings
 from vmgs.eval.metrics import Metrics, metrics_from_run
 from vmgs.eval.report import ComparisonReport, compare_agents, plot_run
 from vmgs.experiment.configs import ConfigSpec, parse_config_spec
-from vmgs.experiment.runner import ExperimentSpec, run_experiment
+from vmgs.experiment.runner import ExperimentSpec, run_experiment, run_suite
+from vmgs.experiment.stress import STRESS_SUITE
 from vmgs.experiment.variants import BaseConditions
 from vmgs.obs.telemetry import estimate_cost_usd, summarize_telemetry
 from vmgs.obs.tracing import apply_tracing, resolve_tracing
@@ -277,6 +278,8 @@ def _experiment_specs(args: argparse.Namespace) -> dict[str, ConfigSpec]:
 
 
 def cmd_experiment(args: argparse.Namespace) -> int:
+    if args.suite:
+        return _cmd_suite(args)
     _setup_tracing(args)
     base_config = _build_config(args)
     weather = _load_weather(base_config.scenario)
@@ -318,6 +321,50 @@ def cmd_experiment(args: argparse.Namespace) -> int:
     print(result.report_md)
     print(
         f"保存先: {result.experiment_dir}（experiment.json / report.md）。各実行は runs/{name}_<構成>_v<番号>/"
+    )
+    return 0
+
+
+def _cmd_suite(args: argparse.Namespace) -> int:
+    """余裕の少ない状況（--suite stress）を、状況ごとに別々に集計して比較する。"""
+    _setup_tracing(args)
+    names = args.conditions.split(",") if args.conditions else list(STRESS_SUITE)
+    unknown = [n for n in names if n not in STRESS_SUITE]
+    if unknown:
+        print(f"エラー: 不明な状況 {unknown}（{', '.join(STRESS_SUITE)}）", file=sys.stderr)
+        return 2
+    try:
+        specs = _experiment_specs(args)
+    except ValueError as e:
+        print(f"エラー: {e}", file=sys.stderr)
+        return 2
+    configs: dict[str, AgentFactory] = {}
+    infos: dict[str, dict[str, str]] = {}
+    for name, spec in specs.items():
+        if spec.kind == "llm":
+            configs[name] = _lazy_llm_factory(spec)
+            infos[name] = _agent_info("llm", spec.provider, spec.model, spec.prompt) or {}
+        else:
+            configs[name] = _agent_factory(spec.kind, None, None)
+
+    def weather_for(scenario: str) -> SeriesWeather:
+        return SeriesWeather(load_records(WEATHER_DIR / f"{scenario}.json"))
+
+    name = args.name or f"{datetime.now():%Y%m%d-%H%M%S}_stress"
+    result = run_suite(
+        name,
+        [STRESS_SUITE[n] for n in names],
+        configs,
+        weather_for,
+        RUNS_DIR,
+        variants=args.variants,
+        seed=args.seed,
+        max_runs=args.max_runs,
+        agent_infos=infos,
+    )
+    print(result.summary_md)
+    print(
+        f"保存先: {result.suite_dir}（suite.json / summary.md）。各実行は runs/{name}_<状況>_<構成>_v<番号>/"
     )
     return 0
 
@@ -419,6 +466,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     ex.add_argument("--variants", type=int, default=5)
     ex.add_argument("--seed", type=int, default=0)
+    ex.add_argument(
+        "--suite",
+        choices=["stress"],
+        help="余裕の少ない状況を状況ごとに比較する（--scenario は無視）",
+    )
+    ex.add_argument(
+        "--conditions",
+        help="--suite の状況をカンマ区切りで絞り込む（例: dry_before_rain,wet_rain）",
+    )
     ex.add_argument("--max-runs", type=int, help="この呼び出しで新たに実行する件数の上限")
     ex.add_argument("--trace", action="store_true", help="LangSmith へトレースを送る")
     ex.add_argument("--trace-project")

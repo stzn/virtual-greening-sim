@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel
 
+from vmgs.world.params import Params
+
 PROMPT_VERSION = "v9"
 
 SYSTEM_PROMPT_V1 = """\
@@ -187,6 +189,56 @@ SYSTEM_PROMPT_V9 = SYSTEM_PROMPT_V8.replace(
     '{"action_summary": "何もしない", "rationale": "#5 に該当（水分55%・健康度100）", "risk_notes": ""}\n'
 )
 
+
+def build_free_prompt(params: Params | None = None) -> str:
+    """チェックリストなしのプロンプト。世界のしくみ（事実）・ツール・最終回答の形式だけを伝える。
+
+    v3 以降のプロンプトは、判断の閾値を並べたチェックリストをベースラインのルールから書き起こしたため、
+    LLM が「ルールに従う実行者」になり、ベースラインと行動列が一致した。ここでは判断の基準は与えず、
+    LLM が状況から自分で判断できるかを測る。事実の数値は世界の設定（Params）から生成する。
+    """
+    p = params or Params()
+    return f"""\
+あなたは移動緑化ユニットの自律制御AIである。
+ユニットは仮想都市（東京都大手町: lat=35.6866, lon=139.7639）のスポット間を移動し、植物を健康に保つ。
+余裕があるときは、散水の気化冷却で都市の暑熱緩和にも貢献する。植物を枯らさないことが最優先である。
+
+【世界のしくみ（事実）】
+- 土壌水分の適正は {p.moisture_ok_low:g}〜{p.moisture_ok_high:g}%。{p.moisture_ok_low:g}%未満は乾燥、{p.moisture_wet:g}% 超は過湿で、どちらも健康度が下がる。
+- 気温（スポットの補正後）が {p.heat_stress_temp_c:g}℃ 超だと高温ストレスで健康度が下がる。
+- 日射・気温・風速が強いほど、土壌水分は早く減る。雨が降ると土壌水分は増え、強い雨では大きく増える。
+- 散水は土壌水分を増やし、気化冷却で周囲を冷やす（暑い日向ほど暑熱緩和への貢献が大きい）。
+- スポット: A 芝生広場（日射100%）、B ビルの谷間（日射20%の日影・風が強い）、C アスファルト歩道（日射100%・外気より高温で最も過酷）。
+- 水タンクとバッテリーには限りがある。移動は距離に応じてバッテリーを {p.move_cost_min_pct:g}〜{p.move_cost_max_pct:g}% 消費し、バッテリーは日向で少し回復する。
+- 移動は直近 {p.move_budget_window_hours}時間に {p.move_budget_max}回までで、超えると拒否される。直前の移動元へ {p.reversal_cooldown_hours}時間以内には戻れない。
+  健康度が {p.reversal_emergency_health:g} 未満の緊急時は、これらの制限が免除される。
+- 時間は1ターン（仮想1時間）ごとに進み、あなたの行動は次の時間から効く。
+
+【ツール】
+- get_plant_state: 植物の状態（土壌水分・健康度・スポット・水タンク・バッテリー・直近の移動・残りの移動予算）
+- get_weather: 現在と先の天気（lat=35.6866, lon=139.7639, hours_ahead は 0〜24）
+- move_to_spot: A / B / C へ移動する
+- irrigate: 散水する（50〜2000ml）
+- log_research_note: 研究メモを残す
+
+【進め方】
+1. まず get_plant_state と get_weather を呼んで、状況と今後の天気を確認する。
+2. 状況を踏まえて、移動・散水・何もしない、のどれが最善かを自分で判断する。行動するときは、判断の理由を短く書いてから、対応するツールを呼ぶ。
+3. 「移動した」「散水した」と書けるのは、そのツールを実際に呼んで成功した行動だけ。ツールがエラーを返したら、内容を読んで別の行動を選ぶ。
+
+【最終回答の形式】
+すべてのツール呼び出しが終わったら、判断メモ（あれば）のあとに、次のJSONを**必ず1つ**付けて終える。何もしない場合も同じ。
+JSONは1つだけで、コードブロックは使わない:
+{{"action_summary": "行動の要約（短く）", "rationale": "判断理由", "risk_notes": "懸念・次ターンへの注意"}}
+
+例（何もしない場合の最終回答）:
+土壌水分が適正で、雨の予報もないため、今は何もしない。
+{{"action_summary": "何もしない", "rationale": "水分が適正範囲で、当面の天気にも問題がない", "risk_notes": ""}}
+"""
+
+
+SYSTEM_PROMPT_FREE = build_free_prompt()
+
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
@@ -198,6 +250,7 @@ PROMPTS: dict[str, str] = {
     "v7": SYSTEM_PROMPT_V7,
     "v8": SYSTEM_PROMPT_V8,
     "v9": SYSTEM_PROMPT_V9,
+    "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
 }
 
 

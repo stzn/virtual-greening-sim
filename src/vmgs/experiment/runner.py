@@ -9,14 +9,15 @@ import json
 import logging
 import statistics
 import time
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from vmgs.agent.protocol import AgentFactory
 from vmgs.eval.metrics import Metrics
+from vmgs.experiment.stress import Condition
 from vmgs.experiment.variants import BaseConditions, make_variant
 from vmgs.sim.records import StepRecord
 from vmgs.sim.simulate import (
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 TIE_TOLERANCE = 1.0  # 最終健康度の差がこの範囲なら引き分け
 MIN_SAMPLES = 5  # これ未満は、差が偶然の可能性があると警告する
+CEILING_HEALTH = 99.0  # 基準構成の最終健康度の平均がこれ以上なら、上限に張り付いて差を測れない
 REPORT_COLUMNS: list[tuple[str, str]] = [
     ("final_health", "最終健康度"),
     ("min_health", "最低健康度"),
@@ -128,6 +130,7 @@ class ExperimentResult:
     warnings: list[str]
     report_md: str
     experiment_dir: Path
+    executed: int = 0  # この呼び出しで新たに実行した件数（完了済みの再利用は含まない）
 
     def completed(self, config: str) -> list[RunOutcome]:
         return [o for o in self.outcomes if o.config == config and o.status == "COMPLETED"]
@@ -225,7 +228,7 @@ def run_experiment(
                 break  # 残りのバリアントも同じ失敗になるため実行しない
             outcomes.append(RunOutcome(cfg, i, run_id, "COMPLETED", metrics=res.metrics))
 
-    return _finish(spec, outcomes, aborted, failed, exp_dir)
+    return _finish(spec, outcomes, aborted, failed, exp_dir, executed)
 
 
 def _run_one(
@@ -258,6 +261,7 @@ def _finish(
     aborted: dict[str, str],
     failed: dict[str, str],
     exp_dir: Path,
+    executed: int,
 ) -> ExperimentResult:
     by_config: dict[str, list[Metrics]] = {}
     for o in outcomes:
@@ -282,6 +286,11 @@ def _finish(
         warnings.append(
             f"標本数が少ない（n={min(sample_sizes)} < {MIN_SAMPLES}）ため、構成間の差は偶然の可能性があります。"
         )
+    if baseline in stats and stats[baseline]["final_health"].mean >= CEILING_HEALTH:
+        warnings.append(
+            f"天井効果: 基準構成 {baseline} の最終健康度が上限（100）に張り付いており、構成間の差を検出できません。"
+            "余裕の少ない状況（--suite stress）で比較してください。"
+        )
     result = ExperimentResult(
         name=spec.name,
         scenario=spec.scenario,
@@ -294,6 +303,7 @@ def _finish(
         warnings=warnings,
         report_md="",
         experiment_dir=exp_dir,
+        executed=executed,
     )
     result.report_md = render_report(spec, result)
     (exp_dir / "report.md").write_text(result.report_md, encoding="utf-8")
@@ -335,4 +345,143 @@ def render_report(spec: ExperimentSpec, result: ExperimentResult) -> str:
     if problems:
         lines += ["", "### 失敗・打ち切りの構成", ""]
         lines += [f"- {cfg}: {reason}" for cfg, reason in problems.items()]
+    return "\n".join(lines) + "\n"
+
+
+@dataclass
+class SuiteResult:
+    name: str
+    conditions: dict[str, ExperimentResult]  # 状況名 → その状況の実験結果
+    baseline: str | None
+    totals: dict[str, tuple[int, int, int]]  # 構成 → 全状況の（勝ち, 引き分け, 負け）合計
+    summary_md: str
+    suite_dir: Path
+    executed: int = 0
+
+
+def run_suite(
+    name: str,
+    conditions: Sequence[Condition],
+    configs: dict[str, AgentFactory],
+    weather_for: Callable[[str], SeriesWeather],
+    runs_dir: Path,
+    *,
+    variants: int = 5,
+    seed: int = 0,
+    max_runs: int | None = None,
+    agent_infos: dict[str, dict[str, str]] | None = None,
+    clock: WallClock = time.perf_counter,
+) -> SuiteResult:
+    """状況ごとに実験を実行し、状況ごとに別々に集計する（状況をまたいで平均しない）。"""
+    suite_dir = runs_dir / name
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    (suite_dir / "suite.json").write_text(
+        json.dumps(
+            {
+                "name": name,
+                "seed": seed,
+                "variants": variants,
+                "configs": list(configs),
+                "conditions": [
+                    {
+                        "name": c.name,
+                        "scenario": c.scenario,
+                        "hours": c.hours,
+                        "base": asdict(c.base),
+                    }
+                    for c in conditions
+                ],
+                "agent_infos": agent_infos or {},
+            },
+            ensure_ascii=False,
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
+    results: dict[str, ExperimentResult] = {}
+    executed = 0
+    for cond in conditions:
+        remaining = None if max_runs is None else max(0, max_runs - executed)
+        spec = ExperimentSpec(
+            name=f"{name}_{cond.name}",  # 実行IDは {suite}_{状況}_{構成}_v{番号}
+            scenario=cond.scenario,
+            configs=configs,
+            variants=variants,
+            seed=seed,
+            hours=cond.hours,
+            base=cond.base,
+            agent_infos=agent_infos or {},
+        )
+        res = run_experiment(
+            spec, weather_for(cond.scenario), runs_dir, max_runs=remaining, clock=clock
+        )
+        executed += res.executed
+        results[cond.name] = res
+
+    baseline = "baseline" if "baseline" in configs else next(iter(configs), None)
+    totals: dict[str, tuple[int, int, int]] = {}
+    for res in results.values():
+        for cfg, (w, t, lo) in res.pairs.items():
+            a, b, c = totals.get(cfg, (0, 0, 0))
+            totals[cfg] = (a + w, b + t, c + lo)
+    summary = render_suite_summary(name, conditions, results, baseline, totals, variants, seed)
+    (suite_dir / "summary.md").write_text(summary, encoding="utf-8")
+    return SuiteResult(name, results, baseline, totals, summary, suite_dir, executed)
+
+
+def _stats_table(result: ExperimentResult) -> list[str]:
+    header = "| 構成 | n | " + " | ".join(label for _, label in REPORT_COLUMNS) + " |"
+    lines = [header, "| --- " * (len(REPORT_COLUMNS) + 2) + "|"]
+    for cfg, stat in result.stats.items():
+        cells = [_cell(stat[key]) for key, _ in REPORT_COLUMNS]
+        lines.append(f"| {cfg} | {stat['final_health'].n} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def render_suite_summary(
+    name: str,
+    conditions: Sequence[Condition],
+    results: dict[str, ExperimentResult],
+    baseline: str | None,
+    totals: dict[str, tuple[int, int, int]],
+    variants: int,
+    seed: int,
+) -> str:
+    lines = [
+        f"## スイート: {name}",
+        "",
+        f"シード {seed} / 各状況 {variants} バリアント / 平均±標準偏差",
+        "",
+    ]
+    for cond in conditions:
+        res = results[cond.name]
+        lines += [f"### {cond.name}（{cond.scenario}・{cond.hours}時間）", "", cond.description, ""]
+        lines += _stats_table(res)
+        lines.append("")
+    if baseline and totals:
+        names = [c.name for c in conditions]
+        lines += [
+            f"### 全状況の合計（{baseline} を基準、最終健康度、同じバリアント同士、許容差 {TIE_TOLERANCE}）",
+            "",
+            "| 構成 | " + " | ".join(names) + " | 合計（勝ち/引き分け/負け） |",
+            "| --- " * (len(names) + 2) + "|",
+        ]
+        for cfg, (w, t, lo) in totals.items():
+            per = [
+                "{}-{}-{}".format(*results[n].pairs[cfg]) if cfg in results[n].pairs else "－"
+                for n in names
+            ]
+            lines.append(f"| {cfg} | " + " | ".join(per) + f" | {w} / {t} / {lo} |")
+        lines.append("")
+    problems = [
+        f"- {cond}/{cfg}: {kind}: {reason}"
+        for cond, res in results.items()
+        for kind, table in (("失敗", res.failed), ("打ち切り", res.aborted))
+        for cfg, reason in table.items()
+    ]
+    if problems:
+        lines += ["### 失敗・打ち切りの構成", "", *problems, ""]
+    warnings = [f"- {cond}: {w}" for cond, res in results.items() for w in res.warnings]
+    if warnings:
+        lines += ["### 警告", "", *warnings, ""]
     return "\n".join(lines) + "\n"

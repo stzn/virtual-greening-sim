@@ -146,3 +146,67 @@ def test_CLI_traceはキーがあれば外部送信の警告を表示する(
     err = capsys.readouterr().err
     assert "プロンプトと応答" in err
     assert "ls-test-key" not in err
+
+
+def test_CLI_suiteは状況ごとに集計して保存し_状況の絞り込みもできる(
+    runs: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    argv = [
+        "experiment",
+        "--suite",
+        "stress",
+        "--name",
+        "ss",
+        "--conditions",
+        "wet_rain,tradeoff",
+        "--variants",
+        "2",
+        "--configs",
+        "baseline,noop",
+    ]
+    assert cli.main(argv) == 0
+    out = capsys.readouterr().out
+    assert "### wet_rain（" in out
+    assert "### tradeoff（" in out
+    assert "### scarce_water" not in out
+    assert "全状況の合計" in out
+    assert (runs / "ss" / "suite.json").exists()
+    assert (runs / "ss_wet_rain_baseline_v1" / "summary.json").exists()
+
+
+def test_CLI_suiteは不明な状況で終了コード2(runs: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert cli.main(["experiment", "--suite", "stress", "--conditions", "nope"]) == 2
+    assert "不明な状況" in capsys.readouterr().err
+
+
+def test_CLI_promptにfreeを選べる(runs: Path) -> None:
+    from langchain_core.messages import AIMessage
+
+    from vmgs.agent.fake import ScriptedChatModel
+    from vmgs.agent.prompts import PROMPTS
+
+    model = ScriptedChatModel(
+        responses=[AIMessage(content='{"action_summary": "何もしない"}')], cycle=True
+    )
+    import pytest as _pytest
+
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(cli, "make_chat_model", lambda settings: model)
+    try:
+        argv = [
+            "run",
+            "--scenario",
+            "normal",
+            "--hours",
+            "1",
+            "--agent",
+            "llm",
+            "--prompt",
+            "free",
+            "--run-id",
+            "pf",
+        ]
+        assert cli.main(argv) == 0
+    finally:
+        mp.undo()
+    assert model.inputs[0][0].content == PROMPTS["free"]
