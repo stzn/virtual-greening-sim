@@ -50,6 +50,7 @@ METRIC_KEYS = {
     "ガードによる拒否": "guard_rejections",
     "要約崩れ": "malformed_summaries",
     "宣言のみ": "unexecuted_claims",
+    "再確認": "claim_retries",
 }
 
 
@@ -306,6 +307,26 @@ def _g_claim(sc: SimCtx, summary: str, tool: str) -> None:
         )
         calls = [ToolCallRecord(name=tool, args=args, result=result)]
     sc.synthetic = [_step(1, TurnDecision(action_summary=summary), calls)]
+
+
+@given(parsers.parse("再確認を経たステップが {a:d} 件、経ていないステップが {b:d} 件ある"))
+def _g_retried(sc: SimCtx, a: int, b: int) -> None:
+    retried = TurnDecision(action_summary="Bへ移動した", claim_retry=True)
+    plain = TurnDecision(action_summary="現状維持")
+    calls = [_move_call(True)]  # 再確認の結果、移動が実行された
+    sc.synthetic = [_step(i + 1, retried, calls) for i in range(a)]
+    sc.synthetic += [_step(a + i + 1, plain) for i in range(b)]
+
+
+@given("宣言のみとして記録されたステップが 1 件ある")
+def _g_unexecuted_flag(sc: SimCtx) -> None:
+    d = TurnDecision(
+        action_summary="何もしない",
+        claim_retry=True,
+        unexecuted_claim=True,
+        claimed_summary="Bへ移動した",
+    )
+    sc.synthetic = [_step(1, d)]
 
 
 @given("旧形式の判断（要約崩れの記録なし）で要約と判断理由が同一のステップが 1 件ある")
@@ -641,6 +662,11 @@ def _t_guard_rejections(sc: SimCtx, n: int) -> None:
 @then(parsers.parse("指標の要約崩れは {n:d} である"))
 def _t_malformed(sc: SimCtx, n: int) -> None:
     assert _metrics(sc).malformed_summaries == n
+
+
+@then(parsers.parse("指標の再確認は {n:d} 回である"))
+def _t_retries(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).claim_retries == n
 
 
 @then(parsers.parse("指標の宣言のみは {n:d} である"))

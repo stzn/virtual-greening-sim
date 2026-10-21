@@ -8,9 +8,9 @@ from pathlib import Path
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
+from vmgs.agent.claims import claimed_actions
 from vmgs.agent.prompts import SYSTEM_PROMPT, TurnSummary
 from vmgs.agent.runner import AgentRunner, TurnResult
-from vmgs.eval.metrics import claimed_actions
 from vmgs.weather.models import WeatherRecord
 from vmgs.weather.providers import SeriesWeather
 from vmgs.world.clock import SimClock
@@ -164,6 +164,11 @@ def summary_matches_actions(r: TurnResult) -> bool:
     """行動要約が「した」と述べた行動は、すべて成功したツール呼び出しとして実在する。"""
     executed = {c.name for c in r.tool_calls if c.result.get("ok")}
     return not (claimed_actions(r.decision.action_summary) - executed)
+
+
+def first_time_consistent(r: TurnResult) -> bool:
+    """再確認を促されることなく、要約が実際の行動と一致していた。"""
+    return not r.decision.claim_retry and not r.decision.unexecuted_claim
 
 
 def success_count(results: list[TurnResult], predicates: list[Predicate]) -> int:

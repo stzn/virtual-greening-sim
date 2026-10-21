@@ -8,6 +8,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel
 
+from vmgs.agent.claims import claimed_actions
 from vmgs.sim.records import StepRecord
 from vmgs.sim.store import RunStore
 from vmgs.weather.providers import WeatherProvider, WeatherUnavailableError
@@ -16,22 +17,6 @@ RAIN_HORIZON_HOURS = 3
 RAIN_PROB_THRESHOLD = 70.0
 WASTED_MOVE_WINDOW_HOURS = 4  # 直前の移動の元へ、この時間以内に戻る移動を「無駄」とみなす
 GUARD_ERROR_CODES = {"RECENT_REVERSAL", "MOVE_BUDGET_EXCEEDED"}
-
-# 要約が「行動していない」ことを述べている表現（宣言とはみなさない）
-_NEGATIONS = (
-    "しない",
-    "せず",
-    "しなかった",
-    "試み",
-    "不要",
-    "必要ない",
-    "不可",
-    "なし",
-    "できな",
-    "拒否",
-)
-_MOVE_WORDS = ("移動", "退避")
-_IRRIGATE_WORDS = ("散水", "給水")
 
 
 class MoveEvent(NamedTuple):
@@ -55,7 +40,10 @@ class Metrics(BaseModel):
     final_tank_ml: int
     decision_failures: int
     malformed_summaries: int  # 最終回答がJSONにならず崩れた要約
-    unexecuted_claims: int  # 要約は移動/散水したと言うが、成功したツール呼び出しが無い
+    unexecuted_claims: (
+        int  # 要約は移動/散水したと言うが、成功したツール呼び出しが無い（再確認後も未実行を含む）
+    )
+    claim_retries: int  # 宣言と実行の不一致を検出して再確認を促したターン数
     tool_errors: int
 
 
@@ -69,18 +57,6 @@ def count_wasted_moves(
         if cur.to_spot == prev.from_spot
         and (cur.time - prev.time).total_seconds() <= window_hours * 3600
     )
-
-
-def claimed_actions(summary: str) -> set[str]:
-    """行動要約が「実行した」と述べているツール名。否定・試行の表現は宣言とみなさない。"""
-    if any(n in summary for n in _NEGATIONS):
-        return set()
-    claims: set[str] = set()
-    if any(w in summary for w in _MOVE_WORDS):
-        claims.add("move_to_spot")
-    if any(w in summary for w in _IRRIGATE_WORDS):
-        claims.add("irrigate")
-    return claims
 
 
 def count_irrigation_before_rain(
@@ -109,10 +85,11 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
     irrigation_times: list[datetime] = []
     irrigation_total = 0
     tool_errors = rejected = guard = 0
-    failures = malformed = unexecuted = 0
+    failures = malformed = unexecuted = retries = 0
     for s in steps:
         failures += int(s.decision.failed)
         malformed += int(s.decision.raw_fallback)
+        retries += int(s.decision.claim_retry)
         at = datetime.fromisoformat(s.time)
         spot = s.state_before["spot_id"]
         executed: set[str] = set()
@@ -133,7 +110,11 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
                 irrigation_times.append(at)
         # 崩れた要約は本文そのものなので、宣言のみの判定からは除く
         if not (s.decision.failed or s.decision.raw_fallback):
-            unexecuted += int(bool(claimed_actions(s.decision.action_summary) - executed))
+            # 新ログは要約を実際の行動で置き換え、unexecuted_claim を立てる。旧ログは要約から推定する
+            unexecuted += int(
+                s.decision.unexecuted_claim
+                or bool(claimed_actions(s.decision.action_summary) - executed)
+            )
     last = steps[-1].state_after
     healths = [steps[0].state_before["health"], *(s.state_after["health"] for s in steps)]
     return Metrics(
@@ -154,6 +135,7 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
         decision_failures=failures,
         malformed_summaries=malformed,
         unexecuted_claims=unexecuted,
+        claim_retries=retries,
         tool_errors=tool_errors,
     )
 

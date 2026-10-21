@@ -137,7 +137,7 @@ def _print_result(result: object, run_dir: Path) -> None:
         print(
             f"最終健康度 {m.final_health:.1f} / 最低 {m.min_health:.1f} / 暑熱緩和 {m.heat_mitigation_score:.1f} / "
             f"移動 {m.move_count}（無駄 {m.wasted_moves}）/ 散水 {m.irrigation_total_ml}ml（雨前 {m.irrigation_before_rain}）/ "
-            f"電池 {m.final_battery:.1f}% / タンク {m.final_tank_ml}ml / 判断失敗 {m.decision_failures} / 要約崩れ {m.malformed_summaries} / 宣言のみ {m.unexecuted_claims} / 拒否移動 {m.rejected_moves}（ガード {m.guard_rejections}） / ツールエラー {m.tool_errors}"
+            f"電池 {m.final_battery:.1f}% / タンク {m.final_tank_ml}ml / 判断失敗 {m.decision_failures} / 要約崩れ {m.malformed_summaries} / 宣言のみ {m.unexecuted_claims}（再確認 {m.claim_retries}） / 拒否移動 {m.rejected_moves}（ガード {m.guard_rejections}） / ツールエラー {m.tool_errors}"
         )
     if result.steps:
         plot_run(result.steps, run_dir / "timeseries.png", result.run_id)

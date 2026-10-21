@@ -56,6 +56,18 @@ def _json_body(summary: str) -> str:
     return json.dumps({"action_summary": summary, "rationale": "理由"}, ensure_ascii=False)
 
 
+@given("LLMは次の順に応答する")
+def _llm_script(actx: AgentCtx, datatable: list[list[str]]) -> None:
+    responses: list[AIMessage] = []
+    for i, row in enumerate(_table_rows(datatable)):
+        if row["応答"] == "ツール呼び出し":
+            args = json.loads(row["引数"] or "{}")
+            responses.append(tool_call_message(row["ツール"], args, f"call_{i}"))
+        else:
+            responses.append(_final(_json_body(row["要約"])))
+    actx.model = ScriptedChatModel(responses=responses)
+
+
 @given(parsers.parse('LLMは次の順にツールを呼んでから "{text}" と答える'))
 def _llm_sequence(actx: AgentCtx, datatable: list[list[str]], text: str) -> None:
     actx.model = ScriptedChatModel(responses=[*_tool_messages(datatable), _final(text)])
@@ -145,6 +157,50 @@ def _decision_fields(actx: AgentCtx, names: str) -> None:
 @then(parsers.parse('判断理由に "{text}" が含まれる'))
 def _rationale_has(actx: AgentCtx, text: str) -> None:
     assert text in _result(actx).decision.rationale
+
+
+@then("判断は再確認を経ている")
+def _retried(actx: AgentCtx) -> None:
+    assert _result(actx).decision.claim_retry is True
+
+
+@then("判断は再確認を経ていない")
+def _not_retried(actx: AgentCtx) -> None:
+    assert _result(actx).decision.claim_retry is False
+
+
+@then("判断は宣言のみとして記録される")
+def _unexecuted(actx: AgentCtx) -> None:
+    assert _result(actx).decision.unexecuted_claim is True
+
+
+@then("判断は宣言のみではない")
+def _not_unexecuted(actx: AgentCtx) -> None:
+    assert _result(actx).decision.unexecuted_claim is False
+
+
+@then(parsers.parse('判断が元の要約として "{text}" を保持している'))
+def _claimed_kept(actx: AgentCtx, text: str) -> None:
+    assert _result(actx).decision.claimed_summary == text
+
+
+@then(parsers.parse("LLMへの呼び出しは {n:d} 回である"))
+def _llm_calls(actx: AgentCtx, n: int) -> None:
+    assert actx.model is not None
+    assert len(actx.model.inputs) == n
+
+
+@then(parsers.parse('LLMへの再確認の入力に "{text}" が含まれる'))
+def _nudge_has(actx: AgentCtx, text: str) -> None:
+    assert actx.model is not None
+    nudges = [
+        str(m.content)
+        for batch in actx.model.inputs
+        for m in batch
+        if isinstance(m, HumanMessage) and "【確認】" in str(m.content)
+    ]
+    assert nudges, "再確認のメッセージがLLMに渡されていない"
+    assert any(text in n for n in nudges)
 
 
 @then("判断は上限到達で打ち切られたと記録される")
@@ -243,4 +299,12 @@ def _time_unchanged(ctx: Ctx, hhmm: str) -> None:
 def test_agent_state_keys() -> None:
     """AgentState のキーが想定どおりであること（グラフ入出力の契約）。"""
     keys: set[str] = set(AgentState.__annotations__)
-    assert keys == {"messages", "tool_call_count", "tool_log", "truncated", "decision"}
+    assert keys == {
+        "messages",
+        "tool_call_count",
+        "tool_log",
+        "truncated",
+        "nudged",
+        "retry_requested",
+        "decision",
+    }

@@ -57,6 +57,8 @@ class AgentRunner:
             "tool_call_count": 0,
             "tool_log": [],
             "truncated": False,
+            "nudged": False,
+            "retry_requested": False,
             "decision": None,
         }
         final = self._graph.invoke(init, config={"recursion_limit": self.max_tool_calls * 2 + 10})

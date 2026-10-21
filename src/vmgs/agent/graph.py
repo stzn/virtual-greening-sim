@@ -14,13 +14,14 @@ import re
 from typing import Annotated, Any, Literal, TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, AnyMessage, ToolMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, model_validator
 
+from vmgs.agent.claims import claimed_actions
 from vmgs.tools.tools import ToolBox
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,9 @@ class TurnDecision(BaseModel):
     failed: bool = False  # LLM呼び出しが失敗した
     error: str | None = None
     raw_fallback: bool = False  # 最終回答がJSONにならず、本文をそのまま要約にした（要約崩れ）
+    claim_retry: bool = False  # 要約が述べた行動が未実行だったため、再確認を促した
+    unexecuted_claim: bool = False  # 再確認後も未実行で、要約を実際の行動で置き換えた（宣言のみ）
+    claimed_summary: str | None = None  # 置き換える前の、モデルが述べた要約
 
     @model_validator(mode="before")
     @classmethod
@@ -92,6 +96,8 @@ class AgentState(TypedDict):
     tool_call_count: int
     tool_log: Annotated[list[ToolCallRecord], operator.add]
     truncated: bool
+    nudged: bool  # 宣言と実行の不一致で、再確認を促し済み（1ターンに1回まで）
+    retry_requested: bool  # 直前の verify が再確認を促した
     decision: TurnDecision | None
 
 
@@ -128,6 +134,31 @@ def summarize_executed(calls: list["ToolCallRecord"]) -> str:
         elif c.name == "irrigate":
             parts.append(f"{c.args['amount_ml']}ml散水")
     return "、".join(parts) if parts else "何もしない"
+
+
+def executed_actions(calls: list[ToolCallRecord]) -> set[str]:
+    """成功した行動ツール（移動・散水）の名前。"""
+    return {c.name for c in calls if c.result.get("ok") and c.name in ("move_to_spot", "irrigate")}
+
+
+def nudge_text(claims: set[str], calls: list[ToolCallRecord]) -> str:
+    """宣言と実行の不一致を伝え、実行か撤回かを選ばせる再確認の文面。"""
+    names = "・".join(sorted(claims))
+    text = (
+        f"【確認】最終回答の行動要約は {names} を実行したと述べていますが、"
+        f"この1時間に成功した {names} の呼び出しがありません。"
+    )
+    failed = [
+        f"{c.name}: {c.result['error']['code']}"
+        for c in calls
+        if c.name in claims and not c.result.get("ok")
+    ]
+    if failed:
+        text += f"失敗した呼び出し: {', '.join(failed)}。"
+    return (
+        text + "実行する場合は、いま対応するツールを呼び出してください。"
+        "実行しない場合は、行動要約を実際の行動（何もしない等）に直して、最終回答のJSONを返し直してください。"
+    )
 
 
 def langchain_tools(toolbox: ToolBox) -> list[StructuredTool]:
@@ -200,25 +231,48 @@ def build_turn_graph(
             "truncated": count >= max_tool_calls,
         }
 
+    def verify_node(state: AgentState) -> dict[str, Any]:
+        """最終回答が「実行した」と述べた行動に、成功したツール呼び出しが無ければ、1回だけ再確認を促す。"""
+        ais = [m for m in state["messages"] if isinstance(m, AIMessage)]
+        decision = parse_decision(message_text(ais[-1]) if ais else "")
+        if decision.raw_fallback or state["nudged"]:
+            return {"retry_requested": False}  # 本文そのままの回答は宣言の判定が当てにならない
+        mismatch = claimed_actions(decision.action_summary) - executed_actions(state["tool_log"])
+        if not mismatch:
+            return {"retry_requested": False}
+        nudge = HumanMessage(nudge_text(mismatch, state["tool_log"]))
+        return {"messages": [nudge], "nudged": True, "retry_requested": True}
+
     def finalize_node(state: AgentState) -> dict[str, Any]:
         ais = [m for m in state["messages"] if isinstance(m, AIMessage)]
         text = message_text(ais[-1]) if ais else ""
         decision = parse_decision(text)
+        decision.claim_retry = state["nudged"]
         if decision.raw_fallback:
             # 次ターンの記憶になる要約に本文（判断メモ）を入れない。実行した行動から作る
             decision.action_summary = summarize_executed(state["tool_log"])
+        elif not state["truncated"] and (
+            claimed_actions(decision.action_summary) - executed_actions(state["tool_log"])
+        ):
+            # 再確認後も未実行。偽の宣言を次ターンの記憶に残さず、実際の行動で置き換える
+            decision.claimed_summary = decision.action_summary
+            decision.action_summary = summarize_executed(state["tool_log"])
+            decision.unexecuted_claim = True
         if state["truncated"]:
             decision.truncated = True
             if decision.action_summary == "何もしない":
                 decision.action_summary = "ツール呼び出し上限に達したため打ち切り"
         return {"decision": decision}
 
-    def after_agent(state: AgentState) -> Literal["tools", "finalize", "__end__"]:
+    def after_agent(state: AgentState) -> Literal["tools", "verify", "__end__"]:
         if state["decision"] is not None:
             return "__end__"
         last = state["messages"][-1]
         assert isinstance(last, AIMessage)
-        return "tools" if last.tool_calls else "finalize"
+        return "tools" if last.tool_calls else "verify"
+
+    def after_verify(state: AgentState) -> Literal["agent", "finalize"]:
+        return "agent" if state["retry_requested"] else "finalize"
 
     def after_tools(state: AgentState) -> Literal["agent", "finalize"]:
         return "finalize" if state["truncated"] else "agent"
@@ -226,9 +280,11 @@ def build_turn_graph(
     g = StateGraph(AgentState)
     g.add_node("agent", agent_node)
     g.add_node("tools", tools_node)
+    g.add_node("verify", verify_node)
     g.add_node("finalize", finalize_node)
     g.add_edge(START, "agent")
     g.add_conditional_edges("agent", after_agent)
+    g.add_conditional_edges("verify", after_verify)
     g.add_conditional_edges("tools", after_tools)
     g.add_edge("finalize", END)
     return g.compile()

@@ -22,6 +22,7 @@ from vmgs.eval.trials import (
     called,
     checked_state_before_acting,
     final_answer_is_json,
+    first_time_consistent,
     irrigation_within_tank,
     moved_to,
     not_attempted_move_to,
@@ -150,6 +151,11 @@ def _t_json(ec: EvalCtx) -> None:
 @then("行動要約は実際のツール呼び出しと矛盾しない")
 def _t_consistent(ec: EvalCtx) -> None:
     ec.predicates.append(summary_matches_actions)
+
+
+@then("再確認なしで要約が実際の行動と一致する")
+def _t_first_time(ec: EvalCtx) -> None:
+    ec.predicates.append(first_time_consistent)
 
 
 @then("副作用のあるツールの前に get_plant_state が呼ばれている")
