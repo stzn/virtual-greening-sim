@@ -335,4 +335,5 @@ def find_key(result: dict[str, Any], key: str) -> bool:
 
 
 # 24時間シミュレーション用のステップ定義と fixture（sc）を取り込む
+from tests.step_defs.experiment_steps import *
 from tests.step_defs.sim_steps import *

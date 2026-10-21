@@ -138,10 +138,32 @@ def _t_latency_differs(sc: SimCtx) -> None:
     assert a != b
 
 
-@then("テレメトリのステップ番号は 1 から 24 まで重複なく並ぶ")
-def _t_step_numbers(sc: SimCtx) -> None:
+@then(parsers.parse("テレメトリのステップ番号は 1 から {n:d} まで重複なく並ぶ"))
+def _t_step_numbers(sc: SimCtx, n: int) -> None:
     rows = RunStore(sc.last.run_dir).read_telemetry()
-    assert [r.step for r in rows] == list(range(1, 25))
+    assert [r.step for r in rows] == list(range(1, n + 1))
+
+
+@when(
+    parsers.parse(
+        "{k:d}時間目で中断した実行に、チェックポイントより先の{j:d}時間目のテレメトリとトレースだけが書かれている"
+    )
+)
+def _w_crash_between_writes(sc: SimCtx, k: int, j: int) -> None:
+    """ステップ記録・テレメトリ・トレースを書いた後、チェックポイントの前に落ちた状態を作る。"""
+    sc.run(6, stop_after=k)
+    store = RunStore(sc.last.run_dir)
+    store.append_telemetry(
+        StepTelemetry(
+            step=j, latency_s=1.0, llm_calls=1, input_tokens=1, output_tokens=1, total_tokens=2
+        )
+    )
+    store.append_trace({"step": j, "time": "stale", "messages": []})
+
+
+@when(parsers.parse("その実行を {n:d}時間目まで再開する"))
+def _w_resume_last(sc: SimCtx, n: int) -> None:
+    sc.results.append(sc.resume(sc.last.run_id))
 
 
 # ---------------- トレースログ ----------------
