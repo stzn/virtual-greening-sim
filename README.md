@@ -62,3 +62,12 @@ uv run vmgs compare --preset tradeoff --agents baseline,noop     # 14時・猛�
 ```
 実行ごとに `runs/<run_id>/` へ `steps.jsonl`（毎時の状態・ツール呼び出し・判断）、`summary.json`（終了理由・指標）、
 `checkpoints/`、`research_notes.md`、`timeseries.png` を保存する。
+
+## 複数回・複数モデルの比較と可観測性
+```bash
+# 初期条件を少しずつ変えた5バリアントで、構成を比較（完了済みの実行は再利用され、同名で再開できる）
+uv run vmgs experiment --name exp1 --scenario heatwave --variants 5 --configs baseline,noop,llm:ollama:qwen3:14b:v9
+uv run vmgs telemetry <RUN_ID>          # トークン・レイテンシ・コスト概算
+uv run vmgs run --agent llm --trace     # LangSmith へ送信（外部サービス。プロンプトと応答が送られる。要 APIキー）
+```
+実行ごとに `telemetry.jsonl`（トークン・レイテンシ）と `traces.jsonl`（LLMへの入出力。次ターンへ渡した記憶も確認できる）を保存する。

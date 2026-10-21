@@ -37,7 +37,9 @@
 - [x] 宣言のみの抑制: 再確認の促し(1回)+要約の置き換え。198テスト緑、実LLM24hで宣言のみ 1→0、回帰評価 13/13
 - [ ] フェーズ4: 可観測性と複数回・複数モデル比較
   - [x] 4-0 feature（obs/tracing 10件・obs/telemetry 17件・experiment/variants 7件・experiment/experiment 17件＝計51件、Red確認済み）
-  - [ ] 4-1 トレース設定（既定オフ・明示+APIキーで有効・警告）と各ターンのメタデータ(run_name/tags/metadata)
-  - [ ] 4-2 テレメトリ(telemetry.jsonl: トークン・レイテンシ・LLM呼び出し数)とトレースログ(traces.jsonl)、再開時の整合、コスト概算
-  - [ ] 4-3 バリアント生成(シード付き)と実験ランナー(再利用・再開・失敗の隔離・対比較・警告)、`vmgs experiment`
-  - [ ] 4-4 実LLMで複数回・複数モデル(qwen3:14b / gemma3:27b)比較し docs に記録
+  - [x] 4-1 トレース設定（既定オフ・明示+APIキーで有効・警告）と各ターンのメタデータ(run_name/tags/metadata)
+  - [x] 4-2 テレメトリ(telemetry.jsonl: トークン・レイテンシ・LLM呼び出し数)とトレースログ(traces.jsonl)、再開時の整合、コスト概算
+  - [x] 4-3 バリアント生成(シード付き)と実験ランナー(再利用・再開・失敗の隔離・対比較・警告)、`vmgs experiment`
+  - [x] 4-4 実LLMで複数回・複数モデル比較（exp1）を docs/eval-results.md に記録。qwen3:14b v9 はベースラインと引き分け(行動列4/5一致)、gemma3:27b はツール非対応で打ち切り
+  - [ ] LangSmith への実送信の確認（APIキー設定後に `--trace`）
+  - [ ] 余裕の少ない状況(tradeoff・雨天・過湿)での比較、チェックリストを外したプロンプトの比較（天井効果の解消）
