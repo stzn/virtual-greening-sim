@@ -71,3 +71,11 @@ uv run vmgs telemetry <RUN_ID>          # トークン・レイテンシ・コ�
 uv run vmgs run --agent llm --trace     # LangSmith へ送信（外部サービス。プロンプトと応答が送られる。要 APIキー）
 ```
 実行ごとに `telemetry.jsonl`（トークン・レイテンシ）と `traces.jsonl`（LLMへの入出力。次ターンへ渡した記憶も確認できる）を保存する。
+
+### 余裕の少ない状況（ストレススイート）
+猛暑日24時間ではベースラインが健康度100の天井に張り付き、構成間の差を測れない。ベースラインが天井に届かない4状況で比較する。
+```bash
+uv run vmgs experiment --suite stress --name s1 --variants 5 --configs baseline,noop,llm:ollama:qwen3:14b:v9,llm:ollama:qwen3:14b:free
+uv run vmgs experiment --suite stress --conditions dry_before_rain,wet_rain ...   # 状況を絞る
+```
+`:free` はチェックリストなしのプロンプト（世界のしくみ・ツール・回答形式のみ）。
