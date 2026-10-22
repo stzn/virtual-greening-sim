@@ -3,8 +3,10 @@
 import re
 from dataclasses import dataclass
 
+from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS
+
 PROVIDERS = {"openai", "anthropic", "ollama"}
-_PROMPT = re.compile(r"v\d+|free|hybrid")
+_PROMPT = re.compile(r"v\d+|free|hybrid|plan")
 
 
 @dataclass(frozen=True)
@@ -13,6 +15,11 @@ class ConfigSpec:
     provider: str | None = None
     model: str | None = None
     prompt: str | None = None
+
+    @property
+    def planning_observations(self) -> bool:
+        """このプロンプトは世界側の計画観測を要する（plan を選んだ構成にだけ有効にする）。"""
+        return self.kind == "llm" and self.prompt in PROMPT_REQUIRES_PLAN_OBS
 
     @property
     def name(self) -> str:
@@ -24,7 +31,7 @@ class ConfigSpec:
 
 
 def parse_config_spec(text: str) -> ConfigSpec:
-    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid ならプロンプト。"""
+    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid / plan ならプロンプト。"""
     if text in ("baseline", "noop", "llm"):
         return ConfigSpec(text)
     tokens = text.split(":")

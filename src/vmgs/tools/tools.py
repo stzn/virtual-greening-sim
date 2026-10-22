@@ -128,7 +128,7 @@ class ToolBox:
 
     def _get_plant_state(self, _: GetPlantStateArgs) -> dict[str, Any]:
         s = self.world.state()
-        return {
+        out: dict[str, Any] = {
             "sim_time": s.sim_time.isoformat(timespec="minutes"),
             "spot_id": s.spot_id,
             "spot_name": s.spot_name,
@@ -150,6 +150,10 @@ class ToolBox:
                 else None
             ),
         }
+        planning = self.world.planning_observations()
+        if planning is not None:
+            out.update(planning)
+        return out
 
     def _move_to_spot(self, a: MoveToSpotArgs) -> dict[str, Any]:
         r = self.world.move_to(a.spot_id)

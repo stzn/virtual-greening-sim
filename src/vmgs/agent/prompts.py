@@ -256,8 +256,28 @@ def build_hybrid_prompt(params: Params | None = None) -> str:
     return build_free_prompt(params).replace("【進め方】", PLANNING_HINTS + "【進め方】", 1)
 
 
+# 計画観測（get_plant_state が返す、残り時間と残り時間あたりの水・電池）の説明。数字・閾値は含めない。
+# hybrid の文章のヒントでは、一日先の天気を見る割合は増えたが水の配分に結びつかなかった。
+# 往復移動のときは世界側の観測で解決したため、資源計画も観測（計算値のみ）で橋渡しする。
+PLAN_OBSERVATION_HINT = (
+    "- get_plant_state は、残り時間（hours_remaining）と、水タンク残量・バッテリー残量を残り時間で割った値"
+    "（water_per_remaining_hour_ml、battery_per_remaining_hour_pct）も返す。"
+    "一日を通した配分の目安であり、いまの水の減り方や今後の天気と照らして使う。\n"
+)
+
+# plan のように、世界側に計画観測を要するプロンプト（選んだ構成にだけ計画観測を有効にする）
+PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan"})
+
+
+def build_plan_prompt(params: Params | None = None) -> str:
+    """hybrid に、計画観測の説明を1文だけ足したプロンプト。差分はその1文だけ。"""
+    hints = PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + "\n"
+    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+
+
 SYSTEM_PROMPT_FREE = build_free_prompt()
 SYSTEM_PROMPT_HYBRID = build_hybrid_prompt()
+SYSTEM_PROMPT_PLAN = build_plan_prompt()
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
@@ -272,6 +292,7 @@ PROMPTS: dict[str, str] = {
     "v9": SYSTEM_PROMPT_V9,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
+    "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
 }
 
 

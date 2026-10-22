@@ -71,6 +71,7 @@ class ExCtx:
         self.stats: dict[str, dict[str, Stat]] = {}
         self.pair_results: dict[str, tuple[int, int, int]] = {}
         self.condition: Condition | None = None
+        self.planning_configs: set[str] = set()
         self.suite_results: list[SuiteResult] = []
         self._suite_mode = False
 
@@ -104,6 +105,7 @@ class ExCtx:
             seed=self.seed,
             hours=cond.hours if cond else 24,
             base=cond.base if cond else BaseConditions(),
+            planning_configs=set(self.planning_configs),
         )
 
     def run(self, **kwargs: Any) -> ExperimentResult:
@@ -129,6 +131,7 @@ class ExCtx:
                 self.sc.runs_dir,
                 variants=self.variants,
                 seed=self.seed,
+                planning_configs=set(self.planning_configs),
                 **kwargs,
             )
         except Exception as e:
@@ -545,3 +548,77 @@ def _t_suite_json(ex: ExCtx, s: int, k: int, a: str, b: str, n: int) -> None:
     assert len(data["conditions"]) == k
     assert data["configs"] == [a, b]
     assert data["variants"] == n
+
+
+# ================= 計画観測（構成ごと） =================
+OBS_KEYS = ("hours_remaining", "water_per_remaining_hour_ml", "battery_per_remaining_hour_pct")
+
+
+@given(parsers.parse('構成 "{c}" は計画観測が有効である'))
+def _g_planning(ex: ExCtx, c: str) -> None:
+    ex.planning_configs.add(c)
+
+
+def _run_dirs(ex: ExCtx, cfg: str) -> list[Path]:
+    prefix = f"{ex.name}_{cfg}_v"
+    dirs = sorted(p for p in ex.sc.runs_dir.iterdir() if p.name.startswith(prefix))
+    assert dirs, f"{prefix} の実行が無い"
+    return dirs
+
+
+def _planning_flag(run_dir: Path) -> bool:
+    return bool(RunStore(run_dir).read_meta()["config"]["planning_observations"])
+
+
+def _has_obs(run_dir: Path) -> bool:
+    calls = [c for s in RunStore(run_dir).read_steps() for c in s.tool_calls]
+    states = [c for c in calls if c.name == "get_plant_state"]
+    assert states
+    return all(all(k in c.result for k in OBS_KEYS) for c in states)
+
+
+def _lacks_obs(run_dir: Path) -> bool:
+    calls = [c for s in RunStore(run_dir).read_steps() for c in s.tool_calls]
+    states = [c for c in calls if c.name == "get_plant_state"]
+    assert states
+    return not any(k in c.result for c in states for k in OBS_KEYS)
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行で計画観測が有効である'))
+def _t_cfg_enabled(ex: ExCtx, c: str) -> None:
+    assert all(_planning_flag(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行で計画観測は無効である'))
+def _t_cfg_disabled(ex: ExCtx, c: str) -> None:
+    assert not any(_planning_flag(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行のツール結果に計画観測が含まれる'))
+def _t_cfg_has_obs(ex: ExCtx, c: str) -> None:
+    assert all(_has_obs(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行のツール結果に計画観測は含まれない'))
+def _t_cfg_lacks_obs(ex: ExCtx, c: str) -> None:
+    assert all(_lacks_obs(d) for d in _run_dirs(ex, c))
+
+
+def _suite_run_dirs(ex: ExCtx, cfg: str) -> list[Path]:
+    dirs = [
+        p
+        for p in ex.sc.runs_dir.iterdir()
+        if p.name.startswith(f"{ex.name}_") and f"_{cfg}_v" in p.name and p.is_dir()
+    ]
+    assert len(dirs) == len(STRESS_SUITE)
+    return dirs
+
+
+@then(parsers.parse('全ての状況で構成 "{c}" の実行は計画観測が有効である'))
+def _t_suite_enabled(ex: ExCtx, c: str) -> None:
+    assert all(_planning_flag(d) for d in _suite_run_dirs(ex, c))
+
+
+@then(parsers.parse('全ての状況で構成 "{c}" の実行は計画観測が無効である'))
+def _t_suite_disabled(ex: ExCtx, c: str) -> None:
+    assert not any(_planning_flag(d) for d in _suite_run_dirs(ex, c))

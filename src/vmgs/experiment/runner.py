@@ -105,6 +105,8 @@ class ExperimentSpec:
     hours: int = 24
     base: BaseConditions = field(default_factory=BaseConditions)
     agent_infos: dict[str, dict[str, str]] = field(default_factory=dict)
+    # 計画観測（残り時間あたりの水・電池）を get_plant_state に返す構成。他の構成の世界は変わらない
+    planning_configs: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -145,7 +147,7 @@ def _abort_reason(steps: Sequence[StepRecord]) -> str:
     return f"全ステップが判断失敗（{err}）"
 
 
-def _sim_config(spec: ExperimentSpec, index: int) -> SimConfig:
+def _sim_config(spec: ExperimentSpec, index: int, cfg: str) -> SimConfig:
     v = make_variant(spec.base, spec.seed, index)
     return SimConfig(
         scenario=spec.scenario,
@@ -155,6 +157,7 @@ def _sim_config(spec: ExperimentSpec, index: int) -> SimConfig:
         initial_moisture=v.moisture,
         initial_tank_ml=v.tank_ml,
         initial_battery_pct=v.battery_pct,
+        planning_observations=cfg in spec.planning_configs,
     )
 
 
@@ -244,7 +247,7 @@ def _run_one(
     if (runs_dir / run_id / "run.json").exists():
         return resume_simulation(run_id, runs_dir, weather, factory, clock=clock)
     return run_simulation(
-        _sim_config(spec, index),
+        _sim_config(spec, index, cfg),
         weather,
         factory,
         runs_dir,
@@ -370,6 +373,7 @@ def run_suite(
     seed: int = 0,
     max_runs: int | None = None,
     agent_infos: dict[str, dict[str, str]] | None = None,
+    planning_configs: set[str] | None = None,
     clock: WallClock = time.perf_counter,
 ) -> SuiteResult:
     """状況ごとに実験を実行し、状況ごとに別々に集計する（状況をまたいで平均しない）。"""
@@ -411,6 +415,7 @@ def run_suite(
             hours=cond.hours,
             base=cond.base,
             agent_infos=agent_infos or {},
+            planning_configs=planning_configs or set(),
         )
         res = run_experiment(
             spec, weather_for(cond.scenario), runs_dir, max_runs=remaining, clock=clock

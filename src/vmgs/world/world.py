@@ -73,11 +73,16 @@ class World:
         notes_path: Path,
         params: Params | None = None,
         start_spot: str = "A",
+        horizon_end: datetime | None = None,
+        planning_observations: bool = False,
     ) -> None:
         self.weather = weather
         self.clock = clock
         self.params = params or Params()
         self.notes_path = notes_path
+        # 計画観測: シミュレーションの終了時刻までの残りから、水・電池の「1時間あたりに使える量」を返す
+        self.horizon_end = horizon_end
+        self.planning_observations_enabled = planning_observations
         self.plant = PlantUnit(
             spot_id=start_spot,
             moisture=self.params.initial_moisture,
@@ -124,6 +129,30 @@ class World:
 
     def _hours_since(self, t: datetime) -> int:
         return int((self.clock.now - t).total_seconds() // 3600)
+
+    def planning_observations(self) -> dict[str, float | int | None] | None:
+        """計画観測（計算値のみ。判断基準は含まない）。無効なら None。
+
+        hours_remaining は現在のターンを含む残りターン数。水・電池は残量を残り時間で割っただけの値。
+        終了時刻が不明、または残り時間が 0 以下のときは、3つとも None。
+        """
+        if not self.planning_observations_enabled:
+            return None
+        remaining: int | None = None
+        if self.horizon_end is not None:
+            remaining = int((self.horizon_end - self.clock.now).total_seconds() // 3600)
+        if remaining is None or remaining <= 0:
+            return {
+                "hours_remaining": None,
+                "water_per_remaining_hour_ml": None,
+                "battery_per_remaining_hour_pct": None,
+            }
+        p = self.plant
+        return {
+            "hours_remaining": remaining,
+            "water_per_remaining_hour_ml": round(p.water_tank_ml / remaining, 1),
+            "battery_per_remaining_hour_pct": round(p.battery_pct / remaining, 1),
+        }
 
     # --- 時間経過 ---
     def advance(self, hours: int = 1) -> None:

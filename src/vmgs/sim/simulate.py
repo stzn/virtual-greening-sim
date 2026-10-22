@@ -4,7 +4,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,8 @@ class SimConfig(BaseModel):
     initial_health: float | None = None
     initial_battery_pct: float | None = None
     initial_tank_ml: int | None = None
+    # 計画観測（残り時間あたりの水・電池）を get_plant_state に返す。既定はオフで、オフなら出力は変わらない
+    planning_observations: bool = False
 
 
 @dataclass
@@ -81,7 +83,13 @@ class _Run:
 def _build_world(config: SimConfig, weather: SeriesWeather, store: RunStore) -> World:
     assert config.start_time is not None
     world = World(
-        weather, SimClock(config.start_time), notes_path=store.notes_path, start_spot=config.spot
+        weather,
+        SimClock(config.start_time),
+        notes_path=store.notes_path,
+        start_spot=config.spot,
+        # 終了時刻は設定（開始時刻 + 時間数）から決める。再開しても同じ値になる
+        horizon_end=config.start_time + timedelta(hours=config.hours),
+        planning_observations=config.planning_observations,
     )
     p = world.plant
     if config.initial_moisture is not None:

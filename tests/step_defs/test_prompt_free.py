@@ -5,6 +5,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from vmgs.agent.graph import parse_decision
 from vmgs.agent.prompts import (
+    PLAN_OBSERVATION_HINT,
     PLANNING_HINTS,
     PROMPTS,
     SYSTEM_PROMPT,
@@ -67,6 +68,30 @@ def _t_no_hash_lines(pc: PromptCtx) -> None:
 def _t_no_criteria(pc: PromptCtx, datatable: list[list[str]]) -> None:
     present = [row[0] for row in datatable[1:] if row[0] in pc.text]
     assert not present, present
+
+
+@then(parsers.parse('プロンプトから計画観測の説明を取り除くと "{name}" と完全に一致する'))
+def _t_only_obs_hint_differs(pc: PromptCtx, name: str) -> None:
+    assert PLAN_OBSERVATION_HINT in pc.text
+    assert pc.text.replace(PLAN_OBSERVATION_HINT, "") == PROMPTS[name]
+
+
+@then("計画観測の説明に数字は含まれない")
+def _t_obs_hint_no_digits(pc: PromptCtx) -> None:
+    import re
+
+    assert not re.search(r"[0-9０-９]", PLAN_OBSERVATION_HINT)
+
+
+@then("計画観測の説明に次の語が含まれる")
+def _t_obs_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
+    missing = [row[0] for row in datatable[1:] if row[0] not in PLAN_OBSERVATION_HINT]
+    assert not missing, missing
+
+
+@then(parsers.parse('構成の指定 "{text}" の計画観測は {state} である'))
+def _t_spec_plan_obs(text: str, state: str) -> None:
+    assert parse_config_spec(text).planning_observations is (state == "有効")
 
 
 @then("プロンプトに次の語が含まれる")
