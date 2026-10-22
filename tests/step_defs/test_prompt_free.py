@@ -14,7 +14,7 @@ from vmgs.agent.prompts import (
 from vmgs.experiment.configs import parse_config_spec
 from vmgs.world.params import Params
 
-scenarios("agent/prompt_free.feature", "agent/prompt_hybrid.feature")
+scenarios("agent/prompt_free.feature", "agent/prompt_hybrid.feature", "agent/prompt_plan.feature")
 
 
 class PromptCtx:
