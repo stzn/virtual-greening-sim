@@ -55,6 +55,7 @@ METRIC_KEYS = {
     "要約崩れ": "malformed_summaries",
     "宣言のみ": "unexecuted_claims",
     "再確認": "claim_retries",
+    "切り詰められた散水": "truncated_irrigations",
 }
 
 
@@ -410,6 +411,26 @@ def _g_unexecuted_flag(sc: SimCtx) -> None:
     sc.synthetic = [_step(1, d)]
 
 
+@given("散水の結果が次のとおり記録されている")
+def _g_irrigations(sc: SimCtx, datatable: list[list[str]]) -> None:
+    header, *rows = datatable
+    calls: list[ToolCallRecord] = []
+    for row in rows:
+        rec = dict(zip(header, row, strict=True))
+        requested, applied = int(rec["要求"]), int(rec["実際"])
+        result: dict[str, Any] = {"ok": True}
+        if rec["切り詰め"] == "あり":
+            result |= {"truncated": True, "requested_ml": requested, "applied_ml": applied}
+        calls.append(ToolCallRecord(name="irrigate", args={"amount_ml": requested}, result=result))
+    sc.synthetic = [_step(1, TurnDecision(action_summary="散水"), calls)]
+
+
+@given(parsers.parse("旧形式の散水の結果が要求量 {n:d}ml で記録されている"))
+def _g_legacy_irrigation(sc: SimCtx, n: int) -> None:
+    call = ToolCallRecord(name="irrigate", args={"amount_ml": n}, result={"ok": True})
+    sc.synthetic = [_step(1, TurnDecision(action_summary="散水"), [call])]
+
+
 @given("旧形式の判断（要約崩れの記録なし）で要約と判断理由が同一のステップが 1 件ある")
 def _g_legacy(sc: SimCtx) -> None:
     legacy = {"action_summary": "#1: 降水確率 → 非該当", "rationale": "#1: 降水確率 → 非該当"}
@@ -744,6 +765,11 @@ def _t_guard_rejections(sc: SimCtx, n: int) -> None:
 @then(parsers.parse("指標の要約崩れは {n:d} である"))
 def _t_malformed(sc: SimCtx, n: int) -> None:
     assert _metrics(sc).malformed_summaries == n
+
+
+@then(parsers.parse("指標の切り詰められた散水は {n:d} 回である"))
+def _t_truncated_irrigations(sc: SimCtx, n: int) -> None:
+    assert _metrics(sc).truncated_irrigations == n
 
 
 @then(parsers.parse("指標の再確認は {n:d} 回である"))

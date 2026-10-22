@@ -109,6 +109,23 @@ def _last_move(ctx: Ctx, a: str, b: str, n: int) -> None:
     assert ctx.result["last_move"] == {"from": a, "to": b, "hours_ago": n}
 
 
+@then(parsers.parse("結果は 切り詰められ、要求 {r:d}ml・実際 {a:d}ml である"))
+def _truncated_result(ctx: Ctx, r: int, a: int) -> None:
+    res = ctx.result
+    assert res["ok"] is True
+    assert (res["truncated"], res["requested_ml"], res["applied_ml"]) == (True, r, a)
+
+
+@then(parsers.parse('結果のメッセージに "{text}" が含まれる'))
+def _result_message(ctx: Ctx, text: str) -> None:
+    assert text in ctx.result["message"]
+
+
+@then("結果に 切り詰め・要求量・実際の量 は含まれない")
+def _no_truncation_keys(ctx: Ctx) -> None:
+    assert not any(k in ctx.result for k in ("truncated", "requested_ml", "applied_ml", "message"))
+
+
 @then("結果は成功である")
 def _ok(ctx: Ctx) -> None:
     assert ctx.result["ok"] is True, ctx.result

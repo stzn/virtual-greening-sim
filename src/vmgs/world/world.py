@@ -62,6 +62,12 @@ class IrrigateResult(BaseModel):
     water_tank_ml: int
     cooling_c: float
     heat_mitigation_gain: float
+    requested_ml: int
+    applied_ml: int  # 実際に散水した量（要求がタンク残量を超えたときは残量）
+
+    @property
+    def truncated(self) -> bool:
+        return self.applied_ml < self.requested_ml
 
 
 class World:
@@ -260,18 +266,21 @@ class World:
         p, params = self.plant, self.params
         if amount_ml <= 0:
             raise WorldError("INVALID_AMOUNT", "散水量は正の値で指定してください")
-        if amount_ml > p.water_tank_ml:
+        if p.water_tank_ml <= 0:
             raise WorldError(
                 "INSUFFICIENT_WATER",
-                f"タンク残量不足（要求 {amount_ml}ml・残り {p.water_tank_ml}ml）",
+                f"タンクが空で散水できません（要求 {amount_ml}ml）",
                 requested_ml=amount_ml,
                 water_tank_ml=p.water_tank_ml,
             )
-        p.water_tank_ml -= amount_ml
-        p.moisture = clamp(p.moisture + amount_ml * params.irrigation_gain_per_ml)
+        # 要求が残量を超えるときは、エラーにせず残量までに切り詰めて実行する
+        # （エラーは「何も起きず時間だけ過ぎる」無駄な呼び出しになるため）
+        applied = min(amount_ml, p.water_tank_ml)
+        p.water_tank_ml -= applied
+        p.moisture = clamp(p.moisture + applied * params.irrigation_gain_per_ml)
 
         # 気化冷却：冷却需要（実効気温が閾値を超えた分）が大きいほど暑熱緩和への貢献が大きい
-        cooling = min(amount_ml * params.cooling_per_ml, params.cooling_cap_c)
+        cooling = min(applied * params.cooling_per_ml, params.cooling_cap_c)
         need = max(0.0, self.effective_temp() - params.heat_threshold_c)
         gain = cooling * need
         p.heat_mitigation_score += gain
@@ -280,6 +289,8 @@ class World:
             water_tank_ml=p.water_tank_ml,
             cooling_c=cooling,
             heat_mitigation_gain=gain,
+            requested_ml=amount_ml,
+            applied_ml=applied,
         )
 
     def log_note(self, text: str, tags: list[str]) -> Path:

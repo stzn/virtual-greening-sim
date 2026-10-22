@@ -31,6 +31,7 @@ COLUMNS: list[tuple[str, str]] = [
     ("malformed_summaries", "要約崩れ"),
     ("unexecuted_claims", "宣言のみ"),
     ("claim_retries", "再確認"),
+    ("truncated_irrigations", "切り詰め"),
     ("tool_errors", "ツールエラー"),
 ]
 

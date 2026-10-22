@@ -14,7 +14,7 @@ from vmgs.weather.providers import ConstantWeather
 from vmgs.world.clock import SimClock
 from vmgs.world.plant import LastMove, UnitStatus
 from vmgs.world.spots import SPOTS
-from vmgs.world.world import World, WorldError
+from vmgs.world.world import IrrigateResult, World, WorldError
 
 START = datetime(2025, 8, 1, 13, 0)
 
@@ -53,6 +53,7 @@ class Ctx:
         self.value: float = 0.0
         self.compare: dict[str, float] = {}
         self.irrigated_ml = 0
+        self.irrigation: IrrigateResult | None = None
 
     def new_world(self, spot: str = "A") -> World:
         return World(
@@ -178,7 +179,12 @@ def _w_advance_clock(ctx: Ctx) -> None:
 @when(parsers.parse("{n:d}ml 散水する"))
 def _w_irrigate(ctx: Ctx, n: int) -> None:
     ctx.irrigated_ml = n
-    ctx.act(lambda: ctx.world.irrigate(n))
+    ctx.irrigation = None
+
+    def run() -> None:
+        ctx.irrigation = ctx.world.irrigate(n)
+
+    ctx.act(run)
 
 
 @when(parsers.parse('スポット "{spot}" へ移動する'))
@@ -310,6 +316,30 @@ def _t_unchanged_world(ctx: Ctx) -> None:
     now = ctx.snapshot()
     assert now["soil_moisture_pct"] == pytest.approx(ctx.before["soil_moisture_pct"])
     assert now["water_tank_ml"] == ctx.before["water_tank_ml"]
+
+
+@then(parsers.parse("散水は 要求 {r:d}ml・実際 {a:d}ml で切り詰められた"))
+def _t_truncated(ctx: Ctx, r: int, a: int) -> None:
+    assert ctx.irrigation is not None, "散水が実行されていない"
+    assert (ctx.irrigation.requested_ml, ctx.irrigation.applied_ml) == (r, a)
+    assert ctx.irrigation.truncated is True
+
+
+@then("散水は切り詰められていない")
+def _t_not_truncated(ctx: Ctx) -> None:
+    assert ctx.irrigation is not None
+    assert ctx.irrigation.truncated is False
+    assert ctx.irrigation.applied_ml == ctx.irrigation.requested_ml
+
+
+@then(parsers.parse("土壌水分と暑熱緩和スコアは、実際の量 {n:d}ml を散水した場合と同じである"))
+def _t_same_as_applied(ctx: Ctx, n: int) -> None:
+    other = ctx.new_world(ctx.world.plant.spot_id)
+    other.plant.moisture = float(ctx.before["soil_moisture_pct"])
+    other.irrigate(n)
+    assert ctx.world.plant.moisture == pytest.approx(other.plant.moisture)
+    assert ctx.world.plant.heat_mitigation_score == pytest.approx(other.plant.heat_mitigation_score)
+    assert ctx.world.plant.heat_mitigation_score > 0
 
 
 @then(parsers.parse("暑熱緩和スコアは {v:g} より大きい"))

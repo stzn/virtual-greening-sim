@@ -165,12 +165,22 @@ class ToolBox:
 
     def _irrigate(self, a: IrrigateArgs) -> dict[str, Any]:
         r = self.world.irrigate(a.amount_ml)
-        return {
+        out: dict[str, Any] = {
             "soil_moisture_pct": _r(r.soil_moisture_pct),
             "water_tank_ml": r.water_tank_ml,
             "cooling_c": _r(r.cooling_c),
             "heat_mitigation_gain": _r(r.heat_mitigation_gain),
         }
+        if r.truncated:
+            # 切り詰めたときだけキーを足す（切り詰めが無い結果は従来と同一。過去ログ・比較との互換のため）
+            out["truncated"] = True
+            out["requested_ml"] = r.requested_ml
+            out["applied_ml"] = r.applied_ml
+            out["message"] = (
+                f"要求 {r.requested_ml}ml はタンク残量を超えたため、残量の {r.applied_ml}ml に切り詰めて散水しました"
+                + ("。タンクは空です" if r.water_tank_ml == 0 else "")
+            )
+        return out
 
     def _log_note(self, a: LogResearchNoteArgs) -> dict[str, Any]:
         path = self.world.log_note(a.text, a.tags)

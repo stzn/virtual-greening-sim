@@ -44,6 +44,7 @@ class Metrics(BaseModel):
         int  # 要約は移動/散水したと言うが、成功したツール呼び出しが無い（再確認後も未実行を含む）
     )
     claim_retries: int  # 宣言と実行の不一致を検出して再確認を促したターン数
+    truncated_irrigations: int = 0  # 要求がタンク残量を超え、残量までに切り詰められた散水の回数
     tool_errors: int
 
 
@@ -85,7 +86,7 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
     irrigation_times: list[datetime] = []
     irrigation_total = 0
     tool_errors = rejected = guard = 0
-    failures = malformed = unexecuted = retries = 0
+    failures = malformed = unexecuted = retries = truncated = 0
     for s in steps:
         failures += int(s.decision.failed)
         malformed += int(s.decision.raw_fallback)
@@ -106,7 +107,9 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
                 moves.append(MoveEvent(at, spot, new))
                 spot = new
             elif c.name == "irrigate":
-                irrigation_total += int(c.args["amount_ml"])
+                # 実際に散水した量で集計する（旧形式の結果は applied_ml を持たないため、要求量で代用）
+                irrigation_total += int(c.result.get("applied_ml", c.args["amount_ml"]))
+                truncated += int(bool(c.result.get("truncated")))
                 irrigation_times.append(at)
         # 崩れた要約は本文そのものなので、宣言のみの判定からは除く
         if not (s.decision.failed or s.decision.raw_fallback):
@@ -136,6 +139,7 @@ def compute_metrics(steps: Sequence[StepRecord], weather: WeatherProvider | None
         malformed_summaries=malformed,
         unexecuted_claims=unexecuted,
         claim_retries=retries,
+        truncated_irrigations=truncated,
         tool_errors=tool_errors,
     )
 

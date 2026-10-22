@@ -138,7 +138,8 @@ def summarize_executed(calls: list["ToolCallRecord"]) -> str:
         if c.name == "move_to_spot":
             parts.append(f"{c.result['new_spot_id']}へ移動")
         elif c.name == "irrigate":
-            parts.append(f"{c.args['amount_ml']}ml散水")
+            # 実際に散水した量で要約する（切り詰められたときは要求量と異なる）
+            parts.append(f"{c.result.get('applied_ml', c.args['amount_ml'])}ml散水")
     return "、".join(parts) if parts else "何もしない"
 
 
