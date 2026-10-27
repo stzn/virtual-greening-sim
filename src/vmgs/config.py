@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     # Qwen3 等の思考(thinking)モード。有効だと1呼び出し数十秒かかるため既定はオフ
     ollama_reasoning: bool = False
+    # Ollama への1リクエストの上限秒数。思考モードは長く（または循環して）実験全体を止めうるため、思考の構成で設定する
+    ollama_timeout_s: float | None = None
 
     # LangSmith（外部サービスへ送信する。既定はオフ。obs/tracing.py で解決する）
     langsmith_tracing: bool = False

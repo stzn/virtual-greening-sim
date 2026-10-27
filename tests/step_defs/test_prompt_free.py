@@ -3,7 +3,9 @@
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from vmgs import cli
 from vmgs.agent.graph import parse_decision
+from vmgs.agent.llm import make_chat_model
 from vmgs.agent.prompts import (
     PLAN_OBSERVATION_HINT,
     PLANNING_HINTS,
@@ -12,6 +14,7 @@ from vmgs.agent.prompts import (
     build_free_prompt,
     build_hybrid_prompt,
 )
+from vmgs.config import Settings
 from vmgs.experiment.configs import parse_config_spec
 from vmgs.world.params import Params
 
@@ -27,6 +30,8 @@ class PromptCtx:
     def __init__(self) -> None:
         self.text = ""
         self.params = Params()
+        self.settings: Settings | None = None
+        self.chat: object = None
 
 
 @pytest.fixture
@@ -189,3 +194,102 @@ def _t_named_spec(text: str, name: str) -> None:
 @then(parsers.parse('構成の名前は "{name}" になる'))
 def _t_spec_name(name: str) -> None:
     assert parse_config_spec("llm:ollama:qwen3:14b:free").name == name
+
+
+# ---------------- 思考モード（+think） ----------------
+@then(parsers.parse('構成の指定 "{text}" の思考モードは {state} である'))
+def _t_spec_reasoning(text: str, state: str) -> None:
+    assert parse_config_spec(text).reasoning is (state == "有効")
+
+
+@then(
+    parsers.parse(
+        '構成の指定 "{text}" は プロバイダ "{p}"・モデル "{m}" で思考モードが有効と解釈される'
+    )
+)
+def _t_spec_think_only(text: str, p: str, m: str) -> None:
+    spec = parse_config_spec(text)
+    assert (spec.provider, spec.model, spec.prompt, spec.reasoning) == (p, m, None, True)
+
+
+@then(parsers.parse('構成の指定 "{text}" はエラーになり、メッセージに "{msg}" が含まれる'))
+def _t_spec_error(text: str, msg: str) -> None:
+    with pytest.raises(ValueError) as e:
+        parse_config_spec(text)
+    assert msg in str(e.value)
+
+
+def _make_settings(
+    pc: PromptCtx, reasoning: bool, monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.chdir(str(tmp_path))  # 実際の .env を読まない
+    for name in ("OLLAMA_REASONING", "OLLAMA_TIMEOUT_S"):
+        monkeypatch.delenv(name, raising=False)
+    pc.settings = cli._llm_settings("ollama", "qwen3:14b", reasoning)
+    pc.chat = make_chat_model(pc.settings)
+
+
+@when("思考モード有効で Ollama の LLM 設定を作る")
+def _w_settings_think(pc: PromptCtx, monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    _make_settings(pc, True, monkeypatch, tmp_path)
+
+
+@when("思考モード無効で Ollama の LLM 設定を作る")
+def _w_settings_plain(pc: PromptCtx, monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    _make_settings(pc, False, monkeypatch, tmp_path)
+
+
+def _settings(pc: PromptCtx) -> Settings:
+    assert pc.settings is not None
+    return pc.settings
+
+
+@then("設定の思考モードは有効である")
+def _t_setting_on(pc: PromptCtx) -> None:
+    assert _settings(pc).ollama_reasoning is True
+
+
+@then("設定の思考モードは無効である")
+def _t_setting_off(pc: PromptCtx) -> None:
+    assert _settings(pc).ollama_reasoning is False
+
+
+@then(parsers.parse("設定のタイムアウトは {n:d} 秒である"))
+def _t_timeout(pc: PromptCtx, n: int) -> None:
+    assert _settings(pc).ollama_timeout_s == n
+
+
+@then("設定のタイムアウトは なし である")
+def _t_timeout_none(pc: PromptCtx) -> None:
+    assert _settings(pc).ollama_timeout_s is None
+
+
+@then(parsers.parse("生成されるチャットモデルの reasoning は {v} である"))
+def _t_chat_reasoning(pc: PromptCtx, v: str) -> None:
+    assert pc.chat.reasoning is (v == "True")  # type: ignore[attr-defined]
+
+
+@then(parsers.parse("生成されるチャットモデルのタイムアウトは {n:d} 秒である"))
+def _t_chat_timeout(pc: PromptCtx, n: int) -> None:
+    assert pc.chat.client_kwargs["timeout"] == n  # type: ignore[attr-defined]
+
+
+@then("生成されるチャットモデルのタイムアウトは なし である")
+def _t_chat_timeout_none(pc: PromptCtx) -> None:
+    assert "timeout" not in pc.chat.client_kwargs  # type: ignore[attr-defined]
+
+
+@then("思考モード有効の LLM の識別情報に reasoning=true が含まれる")
+def _t_info_think(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    monkeypatch.chdir(str(tmp_path))
+    info = cli._agent_info("llm", "ollama", "qwen3:14b", "hybrid", reasoning=True)
+    assert info is not None
+    assert info["reasoning"] == "true"
+
+
+@then("思考モード無効の LLM の識別情報に reasoning のキーは含まれない")
+def _t_info_plain(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
+    monkeypatch.chdir(str(tmp_path))
+    info = cli._agent_info("llm", "ollama", "qwen3:14b", "hybrid")
+    assert info is not None
+    assert "reasoning" not in info

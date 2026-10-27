@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS
 
 PROVIDERS = {"openai", "anthropic", "ollama"}
-_PROMPT = re.compile(r"v\d+|free|hybrid|plan")
+_PROMPT = re.compile(r"(?P<prompt>v\d+|free|hybrid|plan)?(?P<think>\+think)?")
+THINK_TIMEOUT_S = 600.0  # 思考モードの1リクエストの上限秒数（ハング対策）
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,7 @@ class ConfigSpec:
     provider: str | None = None
     model: str | None = None
     prompt: str | None = None
+    reasoning: bool = False  # Ollama の思考モード（+think）
 
     @property
     def planning_observations(self) -> bool:
@@ -26,12 +28,22 @@ class ConfigSpec:
         """実行IDに使える安全な名前。"""
         if self.kind != "llm":
             return self.kind
-        parts = [p for p in ("llm", self.provider, self.model, self.prompt) if p]
+        parts = [
+            p
+            for p in (
+                "llm",
+                self.provider,
+                self.model,
+                self.prompt,
+                "think" if self.reasoning else None,
+            )
+            if p
+        ]
         return re.sub(r"[^A-Za-z0-9.\-]+", "_", "_".join(parts))
 
 
 def parse_config_spec(text: str) -> ConfigSpec:
-    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid / plan ならプロンプト。"""
+    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid / plan（任意で +think）ならプロンプト。"""
     if text in ("baseline", "noop", "llm"):
         return ConfigSpec(text)
     tokens = text.split(":")
@@ -39,6 +51,16 @@ def parse_config_spec(text: str) -> ConfigSpec:
         raise ValueError(
             f"構成の指定が不正です: {text!r}（baseline / noop / llm / llm:<provider>:<model>[:v数字]）"
         )
-    prompt = tokens[-1] if len(tokens) > 3 and _PROMPT.fullmatch(tokens[-1]) else None
-    model_tokens = tokens[2:-1] if prompt else tokens[2:]
-    return ConfigSpec("llm", provider=tokens[1], model=":".join(model_tokens), prompt=prompt)
+    last = _PROMPT.fullmatch(tokens[-1]) if len(tokens) > 3 else None
+    if last is not None and (last["prompt"] or last["think"]):
+        prompt, reasoning = last["prompt"], bool(last["think"])
+        model_tokens = tokens[2:-1]
+    else:
+        prompt, reasoning, model_tokens = None, False, tokens[2:]
+    if reasoning and tokens[1] != "ollama":
+        raise ValueError(
+            f"+think（思考モード）は Ollama のみ対応です: {text!r}（プロバイダごとに思考の仕組みが違うため）"
+        )
+    return ConfigSpec(
+        "llm", provider=tokens[1], model=":".join(model_tokens), prompt=prompt, reasoning=reasoning
+    )

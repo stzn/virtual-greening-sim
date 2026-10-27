@@ -19,6 +19,9 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
             temperature=0,
             base_url=settings.ollama_base_url,
             reasoning=settings.ollama_reasoning,
+            client_kwargs=(
+                {"timeout": settings.ollama_timeout_s} if settings.ollama_timeout_s else {}
+            ),
         )
     if settings.llm_provider == "openai":
         if not settings.openai_api_key:

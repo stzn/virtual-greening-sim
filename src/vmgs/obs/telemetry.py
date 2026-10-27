@@ -69,6 +69,10 @@ def message_record(m: BaseMessage) -> dict[str, Any]:
             rec["tool_calls"] = [{"name": tc["name"], "args": tc["args"]} for tc in m.tool_calls]
         if m.usage_metadata:
             rec["usage"] = dict(m.usage_metadata)
+        # 思考モードの思考の全文（本文とは別）。計画していたかを全文で裏取りするために残す。無ければキーを足さない
+        reasoning = m.additional_kwargs.get("reasoning_content")
+        if reasoning:
+            rec["reasoning"] = reasoning
     elif isinstance(m, ToolMessage):
         rec["tool_call_id"] = m.tool_call_id
         rec["name"] = m.name

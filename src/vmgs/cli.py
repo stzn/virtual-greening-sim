@@ -18,7 +18,7 @@ from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
 from vmgs.eval.metrics import Metrics, metrics_from_run
 from vmgs.eval.report import ComparisonReport, compare_agents, plot_run
-from vmgs.experiment.configs import ConfigSpec, parse_config_spec
+from vmgs.experiment.configs import THINK_TIMEOUT_S, ConfigSpec, parse_config_spec
 from vmgs.experiment.runner import ExperimentSpec, run_experiment, run_suite
 from vmgs.experiment.stress import STRESS_SUITE
 from vmgs.experiment.variants import BaseConditions
@@ -93,39 +93,54 @@ def cmd_turn(args: argparse.Namespace) -> int:
 RUNS_DIR = Path("runs")
 
 
-def _llm_settings(provider: str | None, model: str | None) -> Settings:
-    overrides: dict[str, str] = {}
+def _llm_settings(provider: str | None, model: str | None, reasoning: bool = False) -> Settings:
+    overrides: dict[str, object] = {}
     if provider:
         overrides["llm_provider"] = provider
     if model:
         overrides["llm_model"] = model
+    if reasoning:
+        # 思考モードは長く（または循環して）実験全体を止めうるので、タイムアウトを付ける
+        overrides["ollama_reasoning"] = True
+        overrides["ollama_timeout_s"] = THINK_TIMEOUT_S
     return Settings(**overrides)  # type: ignore[arg-type]
 
 
 def _agent_factory(
-    name: str, provider: str | None, model: str | None, prompt: str | None = None
+    name: str,
+    provider: str | None,
+    model: str | None,
+    prompt: str | None = None,
+    reasoning: bool = False,
 ) -> AgentFactory:
     if name == "baseline":
         return BaselineAgent
     if name == "noop":
         return NoopAgent
-    chat = make_chat_model(_llm_settings(provider, model))
+    chat = make_chat_model(_llm_settings(provider, model, reasoning))
     system_prompt = PROMPTS[prompt] if prompt else SYSTEM_PROMPT
     return lambda world: AgentRunner(chat, world, system_prompt=system_prompt)
 
 
 def _agent_info(
-    name: str, provider: str | None, model: str | None, prompt: str | None
+    name: str,
+    provider: str | None,
+    model: str | None,
+    prompt: str | None,
+    reasoning: bool = False,
 ) -> dict[str, str] | None:
     """実行の設定(run.json)とトレースのメタデータに残す、LLMの識別情報。"""
     if name in ("baseline", "noop"):
         return None
     settings = _llm_settings(provider, model)
-    return {
+    info = {
         "provider": settings.llm_provider,
         "model": settings.llm_model,
         "prompt_version": prompt or PROMPT_VERSION,
     }
+    if reasoning:
+        info["reasoning"] = "true"  # 思考オフの識別情報にはキーを足さない（従来と同一）
+    return info
 
 
 def _setup_tracing(args: argparse.Namespace) -> None:
@@ -195,8 +210,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             weather = _load_weather(config.scenario)
             if weather is None:
                 return 2
+            recorded_think = (meta.get("agent_info") or {}).get("reasoning") == "true"
             factory = _agent_factory(
-                args.agent or meta["agent"], args.provider, args.model, args.prompt
+                args.agent or meta["agent"],
+                args.provider,
+                args.model,
+                args.prompt,
+                reasoning=args.think or recorded_think,
             )
             result = resume_simulation(
                 args.resume, RUNS_DIR, weather, factory, stop_after=args.stop_after
@@ -209,7 +229,12 @@ def cmd_run(args: argparse.Namespace) -> int:
             if weather is None:
                 return 2
             agent_name = args.agent or "baseline"
-            factory = _agent_factory(agent_name, args.provider, args.model, args.prompt)
+            if args.think and (args.provider or Settings().llm_provider) != "ollama":
+                print("エラー: --think（思考モード）は Ollama のみ対応です", file=sys.stderr)
+                return 2
+            factory = _agent_factory(
+                agent_name, args.provider, args.model, args.prompt, reasoning=args.think
+            )
             run_id = args.run_id or f"{datetime.now():%Y%m%d-%H%M%S}_{config.scenario}_{agent_name}"
             result = run_simulation(
                 config,
@@ -218,7 +243,9 @@ def cmd_run(args: argparse.Namespace) -> int:
                 RUNS_DIR,
                 run_id,
                 agent_name=agent_name,
-                agent_info=_agent_info(agent_name, args.provider, args.model, args.prompt),
+                agent_info=_agent_info(
+                    agent_name, args.provider, args.model, args.prompt, reasoning=args.think
+                ),
                 stop_after=args.stop_after,
             )
     except (MissingApiKeyError, SimulationError) as e:
@@ -298,7 +325,9 @@ def cmd_experiment(args: argparse.Namespace) -> int:
         if spec.kind == "llm":
             # モデルの生成は実行時まで遅らせる（APIキー未設定などは、その構成だけの失敗として記録される）
             configs[name] = _lazy_llm_factory(spec)
-            infos[name] = _agent_info("llm", spec.provider, spec.model, spec.prompt) or {}
+            infos[name] = (
+                _agent_info("llm", spec.provider, spec.model, spec.prompt, spec.reasoning) or {}
+            )
         else:
             configs[name] = _agent_factory(spec.kind, None, None)
     base = BaseConditions(
@@ -346,7 +375,9 @@ def _cmd_suite(args: argparse.Namespace) -> int:
     for name, spec in specs.items():
         if spec.kind == "llm":
             configs[name] = _lazy_llm_factory(spec)
-            infos[name] = _agent_info("llm", spec.provider, spec.model, spec.prompt) or {}
+            infos[name] = (
+                _agent_info("llm", spec.provider, spec.model, spec.prompt, spec.reasoning) or {}
+            )
         else:
             configs[name] = _agent_factory(spec.kind, None, None)
 
@@ -375,7 +406,7 @@ def _cmd_suite(args: argparse.Namespace) -> int:
 
 def _lazy_llm_factory(spec: ConfigSpec) -> AgentFactory:
     def make(world: World) -> TurnAgent:
-        return _agent_factory("llm", spec.provider, spec.model, spec.prompt)(world)
+        return _agent_factory("llm", spec.provider, spec.model, spec.prompt, spec.reasoning)(world)
 
     return make
 
@@ -444,6 +475,11 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--resume", metavar="RUN_ID", help="チェックポイントから再開する")
     r.set_defaults(func=cmd_run)
 
+    r.add_argument(
+        "--think",
+        action="store_true",
+        help="Ollama の思考モードをオンにする（タイムアウト付き。トレースに思考の全文を保存）",
+    )
     r.add_argument(
         "--trace",
         action="store_true",

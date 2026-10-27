@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from tests.step_defs.conftest import Ctx, SimCtx
@@ -16,6 +16,7 @@ from vmgs.obs.telemetry import (
     Usage,
     estimate_cost_usd,
     summarize_telemetry,
+    trace_record,
     usage_from_messages,
 )
 from vmgs.sim.store import RunStore
@@ -32,6 +33,8 @@ class TelCtx:
         self.summary: TelemetrySummary | None = None
         self.prices: dict[str, tuple[float, float]] = {}
         self.cost: float | None = None
+        self.ai: AIMessage | None = None
+        self.trace: dict[str, Any] = {}
 
 
 @pytest.fixture
@@ -198,6 +201,37 @@ def _t_trace_no_memory(sc: SimCtx, h: int) -> None:
 @then(parsers.parse("{h:d}時間目のトレースのメッセージは空である"))
 def _t_trace_empty(sc: SimCtx, h: int) -> None:
     assert _trace(sc, h)["messages"] == []
+
+
+# ---------------- 思考モードの全文 ----------------
+@given(parsers.parse('AIの応答に思考 "{text}" が付いている'))
+def _g_ai_with_reasoning(tl: TelCtx, text: str) -> None:
+    tl.ai = AIMessage(content="何もしない", additional_kwargs={"reasoning_content": text})
+
+
+@given("AIの応答に思考は付いていない")
+def _g_ai_plain(tl: TelCtx) -> None:
+    tl.ai = AIMessage(content="何もしない")
+
+
+@when("トレースの記録を作る")
+def _w_trace(tl: TelCtx) -> None:
+    assert tl.ai is not None
+    tl.trace = trace_record(1, "2025-08-01T00:00", [SystemMessage("s"), HumanMessage("h"), tl.ai])
+
+
+def _ai_record(tl: TelCtx) -> dict[str, Any]:
+    return next(m for m in tl.trace["messages"] if m["role"] == "ai")
+
+
+@then(parsers.parse('トレースのAIメッセージに reasoning "{text}" が含まれる'))
+def _t_trace_reasoning(tl: TelCtx, text: str) -> None:
+    assert _ai_record(tl)["reasoning"] == text
+
+
+@then("トレースのAIメッセージに reasoning のキーは含まれない")
+def _t_trace_no_reasoning(tl: TelCtx) -> None:
+    assert "reasoning" not in _ai_record(tl)
 
 
 # ---------------- 実行の設定 ----------------
