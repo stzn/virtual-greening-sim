@@ -275,9 +275,24 @@ def build_plan_prompt(params: Params | None = None) -> str:
     return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
 
 
+# 退避の先読みの説明。思考オンの hybrid が猛暑の前に退避して改善した（思考オフは退避が遅い）。
+# その差が思考の能力か先読みの指示不足かを分けるために、考え方を1文だけ足す。数字（時刻・閾値）は含めない。
+EARLY_RETREAT_HINT = (
+    "- 退避は、気温と日射のピークの前に済ませる。予報でピークが見えているなら、"
+    "涼しいうちに日影へ退避する方が、ピークの最中に動くより効果が大きい。\n"
+)
+
+
+def build_early_prompt(params: Params | None = None) -> str:
+    """hybrid に、退避の先読みの説明を1文だけ足したプロンプト。差分はその1文だけ。"""
+    hints = PLANNING_HINTS[:-1] + EARLY_RETREAT_HINT + "\n"
+    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+
+
 SYSTEM_PROMPT_FREE = build_free_prompt()
 SYSTEM_PROMPT_HYBRID = build_hybrid_prompt()
 SYSTEM_PROMPT_PLAN = build_plan_prompt()
+SYSTEM_PROMPT_EARLY = build_early_prompt()
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
@@ -293,6 +308,7 @@ PROMPTS: dict[str, str] = {
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
+    "early": SYSTEM_PROMPT_EARLY,  # hybrid + 退避の先読みの説明（世界は変えない）
 }
 
 

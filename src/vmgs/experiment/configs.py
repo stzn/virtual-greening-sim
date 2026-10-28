@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS
 
 PROVIDERS = {"openai", "anthropic", "ollama"}
-_PROMPT = re.compile(r"(?P<prompt>v\d+|free|hybrid|plan)?(?P<think>\+think)?")
+_PROMPT = re.compile(r"(?P<prompt>v\d+|free|hybrid|plan|early)?(?P<think>\+think)?")
 THINK_TIMEOUT_S = 600.0  # 思考モードの1リクエストの上限秒数（ハング対策）
 
 
@@ -43,7 +43,7 @@ class ConfigSpec:
 
 
 def parse_config_spec(text: str) -> ConfigSpec:
-    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid / plan（任意で +think）ならプロンプト。"""
+    """`llm:<provider>:<model>:<prompt>` のモデル名は `:` を含みうる（qwen3:14b）ので、末尾が v数字 / free / hybrid / plan / early（任意で +think）ならプロンプト。"""
     if text in ("baseline", "noop", "llm"):
         return ConfigSpec(text)
     tokens = text.split(":")
