@@ -7,6 +7,7 @@ from vmgs import cli
 from vmgs.agent.graph import parse_decision
 from vmgs.agent.llm import make_chat_model
 from vmgs.agent.prompts import (
+    EARLY_RETREAT_HINT,
     PLAN_OBSERVATION_HINT,
     PLANNING_HINTS,
     PROMPTS,
@@ -22,6 +23,7 @@ scenarios(
     "agent/prompt_free.feature",
     "agent/prompt_hybrid.feature",
     "agent/prompt_plan.feature",
+    "agent/prompt_early.feature",
     "agent/reasoning.feature",
 )
 
@@ -293,3 +295,23 @@ def _t_info_plain(monkeypatch: pytest.MonkeyPatch, tmp_path: object) -> None:
     info = cli._agent_info("llm", "ollama", "qwen3:14b", "hybrid")
     assert info is not None
     assert "reasoning" not in info
+
+
+# ---------------- 退避の先読み（early） ----------------
+@then(parsers.parse('プロンプトから退避の先読みの説明を取り除くと "{name}" と完全に一致する'))
+def _t_only_early_hint_differs(pc: PromptCtx, name: str) -> None:
+    assert EARLY_RETREAT_HINT in pc.text
+    assert pc.text.replace(EARLY_RETREAT_HINT, "") == PROMPTS[name]
+
+
+@then("退避の先読みの説明に数字は含まれない")
+def _t_early_hint_no_digits(pc: PromptCtx) -> None:
+    import re
+
+    assert not re.search(r"[0-9０-９]", EARLY_RETREAT_HINT)
+
+
+@then("退避の先読みの説明に次の語が含まれる")
+def _t_early_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
+    missing = [row[0] for row in datatable[1:] if row[0] not in EARLY_RETREAT_HINT]
+    assert not missing, missing
