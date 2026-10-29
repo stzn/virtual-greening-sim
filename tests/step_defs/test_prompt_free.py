@@ -24,6 +24,7 @@ scenarios(
     "agent/prompt_hybrid.feature",
     "agent/prompt_plan.feature",
     "agent/prompt_early.feature",
+    "agent/prompt_plan_early.feature",
     "agent/reasoning.feature",
 )
 
@@ -315,3 +316,9 @@ def _t_early_hint_no_digits(pc: PromptCtx) -> None:
 def _t_early_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
     missing = [row[0] for row in datatable[1:] if row[0] not in EARLY_RETREAT_HINT]
     assert not missing, missing
+
+
+@then("プロンプトに計画観測の説明と退避の先読みの説明が含まれる")
+def _t_both_hints(pc: PromptCtx) -> None:
+    assert PLAN_OBSERVATION_HINT in pc.text
+    assert EARLY_RETREAT_HINT in pc.text
