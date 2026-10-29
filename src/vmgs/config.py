@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     ollama_reasoning: bool = False
     # Ollama への1リクエストの上限秒数。思考モードは長く（または循環して）実験全体を止めうるため、思考の構成で設定する
     ollama_timeout_s: float | None = None
+    # Claude の拡張思考。None は未指定（thinking を送らない）。構成の +think で adaptive、無しで disabled にする
+    anthropic_thinking: Literal["adaptive", "disabled"] | None = None
 
     # LangSmith（外部サービスへ送信する。既定はオフ。obs/tracing.py で解決する）
     langsmith_tracing: bool = False

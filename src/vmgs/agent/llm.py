@@ -10,6 +10,16 @@ class MissingApiKeyError(Exception):
     pass
 
 
+# 温度を受け付けないモデル（指定すると API が拒否する。モデルの profile で temperature=false）
+_NO_TEMPERATURE_PREFIXES = ("claude-haiku-5", "claude-sonnet-5", "claude-opus-5", "claude-fable-5")
+
+_ANTHROPIC_THINKING: dict[str, dict[str, str]] = {
+    # 新しいモデルは budget_tokens を受け付けない。要約つきで返してもらい、トレースに残す
+    "adaptive": {"type": "adaptive", "display": "summarized"},
+    "disabled": {"type": "disabled"},
+}
+
+
 def make_chat_model(settings: Settings) -> BaseChatModel:
     if settings.llm_provider == "ollama":
         from langchain_ollama import ChatOllama
@@ -35,9 +45,12 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
         raise MissingApiKeyError("ANTHROPIC_API_KEY が未設定です（.env に設定してください）")
     from langchain_anthropic import ChatAnthropic
 
+    thinking = _ANTHROPIC_THINKING.get(settings.anthropic_thinking or "")
+    temperature = None if settings.llm_model.startswith(_NO_TEMPERATURE_PREFIXES) else 0
     return ChatAnthropic(
         model_name=settings.llm_model,
-        temperature=0,
+        temperature=temperature,
+        thinking=thinking,
         api_key=SecretStr(settings.anthropic_api_key),
         timeout=None,
         stop=None,

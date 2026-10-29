@@ -57,9 +57,9 @@ def parse_config_spec(text: str) -> ConfigSpec:
         model_tokens = tokens[2:-1]
     else:
         prompt, reasoning, model_tokens = None, False, tokens[2:]
-    if reasoning and tokens[1] != "ollama":
+    if reasoning and tokens[1] not in ("ollama", "anthropic"):
         raise ValueError(
-            f"+think（思考モード）は Ollama のみ対応です: {text!r}（プロバイダごとに思考の仕組みが違うため）"
+            f"+think（思考モード）は Ollama と Anthropic のみ対応です: {text!r}（プロバイダごとに思考の仕組みが違うため）"
         )
     return ConfigSpec(
         "llm", provider=tokens[1], model=":".join(model_tokens), prompt=prompt, reasoning=reasoning

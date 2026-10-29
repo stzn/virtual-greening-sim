@@ -99,7 +99,9 @@ def _llm_settings(provider: str | None, model: str | None, reasoning: bool = Fal
         overrides["llm_provider"] = provider
     if model:
         overrides["llm_model"] = model
-    if reasoning:
+    if Settings(**overrides).llm_provider == "anthropic":  # type: ignore[arg-type]
+        overrides["anthropic_thinking"] = "adaptive" if reasoning else "disabled"
+    elif reasoning:
         # 思考モードは長く（または循環して）実験全体を止めうるので、タイムアウトを付ける
         overrides["ollama_reasoning"] = True
         overrides["ollama_timeout_s"] = THINK_TIMEOUT_S

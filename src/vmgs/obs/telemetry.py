@@ -62,6 +62,14 @@ def usage_from_messages(messages: Sequence[BaseMessage]) -> Usage:
     )
 
 
+def _thinking_text(m: AIMessage) -> str:
+    """Claude の思考は、本文と並ぶ thinking ブロックで返る。複数あれば改行で連結する。"""
+    if isinstance(m.content, str):
+        return ""
+    blocks = [b for b in m.content if isinstance(b, dict) and b.get("type") == "thinking"]
+    return "\n".join(str(b.get("thinking", "")) for b in blocks if b.get("thinking"))
+
+
 def message_record(m: BaseMessage) -> dict[str, Any]:
     rec: dict[str, Any] = {"role": m.type, "content": message_text(m)}
     if isinstance(m, AIMessage):
@@ -70,7 +78,7 @@ def message_record(m: BaseMessage) -> dict[str, Any]:
         if m.usage_metadata:
             rec["usage"] = dict(m.usage_metadata)
         # 思考モードの思考の全文（本文とは別）。計画していたかを全文で裏取りするために残す。無ければキーを足さない
-        reasoning = m.additional_kwargs.get("reasoning_content")
+        reasoning = m.additional_kwargs.get("reasoning_content") or _thinking_text(m)
         if reasoning:
             rec["reasoning"] = reasoning
     elif isinstance(m, ToolMessage):

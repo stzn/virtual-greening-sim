@@ -126,8 +126,8 @@ def _t_spec_error(text: str, msg: str) -> None:
 
 
 # ---------------- 思考ブロックのトレース ----------------
-def _blocks(*items: tuple[str, str]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+def _blocks(*items: tuple[str, str]) -> list[str | dict[Any, Any]]:
+    out: list[str | dict[Any, Any]] = []
     for kind, text in items:
         if kind == "thinking":
             out.append({"type": "thinking", "thinking": text, "signature": "sig"})
@@ -146,7 +146,11 @@ def _g_text_only(ac: AnthropicCtx, text: str) -> None:
     ac.message = AIMessage(content=_blocks(("text", text)))
 
 
-@given(parsers.parse('思考 "{a}" と思考 "{b}" と本文 "{text}" を持つ AI メッセージがある'))
+@given(
+    parsers.re(
+        r'思考 "(?P<a>.*)" と思考 "(?P<b>.*)" と本文 "(?P<text>.*)" を持つ AI メッセージがある'
+    )
+)
 def _g_two_thinking(ac: AnthropicCtx, a: str, b: str, text: str) -> None:
     ac.message = AIMessage(content=_blocks(("thinking", a), ("thinking", b), ("text", text)))
 
