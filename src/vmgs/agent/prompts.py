@@ -266,7 +266,7 @@ PLAN_OBSERVATION_HINT = (
 )
 
 # plan のように、世界側に計画観測を要するプロンプト（選んだ構成にだけ計画観測を有効にする）
-PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan"})
+PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan", "plan_early"})
 
 
 def build_plan_prompt(params: Params | None = None) -> str:
@@ -289,10 +289,17 @@ def build_early_prompt(params: Params | None = None) -> str:
     return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
 
 
+def build_plan_early_prompt(params: Params | None = None) -> str:
+    """plan に、退避の先読みの説明を1文だけ足したプロンプト。差分はその1文だけ。"""
+    hints = PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + EARLY_RETREAT_HINT + "\n"
+    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+
+
 SYSTEM_PROMPT_FREE = build_free_prompt()
 SYSTEM_PROMPT_HYBRID = build_hybrid_prompt()
 SYSTEM_PROMPT_PLAN = build_plan_prompt()
 SYSTEM_PROMPT_EARLY = build_early_prompt()
+SYSTEM_PROMPT_PLAN_EARLY = build_plan_early_prompt()
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
@@ -309,6 +316,7 @@ PROMPTS: dict[str, str] = {
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
     "early": SYSTEM_PROMPT_EARLY,  # hybrid + 退避の先読みの説明（世界は変えない）
+    "plan_early": SYSTEM_PROMPT_PLAN_EARLY,  # plan + 退避の先読みの説明（計画観測を有効にする）
 }
 
 
