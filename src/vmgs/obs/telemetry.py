@@ -14,7 +14,11 @@ from pydantic import BaseModel
 from vmgs.agent.graph import message_text
 
 # 公開価格の例（100万トークンあたり USD: 入力, 出力）。概算用で、価格は変わるため要確認。
-PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {"gpt-4o-mini": (0.15, 0.60)}
+# claude-haiku-5-5 は「1リクエスト10万トークン以下」の単価（キャッシュなし）
+PRICES_USD_PER_MTOK: dict[str, tuple[float, float]] = {
+    "gpt-4o-mini": (0.15, 0.60),
+    "claude-haiku-5-5": (0.10, 0.50),
+}
 
 
 class Usage(BaseModel):
