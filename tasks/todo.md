@@ -55,3 +55,5 @@
   - [ ] 別モデル／思考オフを5件に揃える／思考の長さの制限／切り詰めのオプション化
 - [x] 別モデル（Claude Haiku 5.5）で scarce_water を5バリアント比較（stress5）。結果は docs/eval-results.md 2026-11-02。
 - [ ] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
+- [x] plan_early_move（移動を温存しない一文）を Haiku 5.5 思考オフで5バリアント比較。思考ありと同等。docs/eval-results.md 2026-11-02 追記。
+- [ ] 一文が不要な退避を誘発しないかを、退避すべきでない状況（normal・rainy 等）で確認／qwen3:14b での再現／散水の失敗（最小量未満）の対処
