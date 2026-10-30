@@ -8,6 +8,7 @@ from vmgs.agent.graph import parse_decision
 from vmgs.agent.llm import make_chat_model
 from vmgs.agent.prompts import (
     EARLY_RETREAT_HINT,
+    MOVE_FIRST_HINT,
     PLAN_OBSERVATION_HINT,
     PLANNING_HINTS,
     PROMPTS,
@@ -25,6 +26,7 @@ scenarios(
     "agent/prompt_plan.feature",
     "agent/prompt_early.feature",
     "agent/prompt_plan_early.feature",
+    "agent/prompt_plan_early_move.feature",
     "agent/reasoning.feature",
 )
 
@@ -322,3 +324,23 @@ def _t_early_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
 def _t_both_hints(pc: PromptCtx) -> None:
     assert PLAN_OBSERVATION_HINT in pc.text
     assert EARLY_RETREAT_HINT in pc.text
+
+
+# ---------------- 移動の説明（plan_early_move） ----------------
+@then(parsers.parse('プロンプトから移動の説明を取り除くと "{name}" と完全に一致する'))
+def _t_only_move_hint_differs(pc: PromptCtx, name: str) -> None:
+    assert MOVE_FIRST_HINT in pc.text
+    assert pc.text.replace(MOVE_FIRST_HINT, "") == PROMPTS[name]
+
+
+@then("移動の説明に数字は含まれない")
+def _t_move_hint_no_digits(pc: PromptCtx) -> None:
+    import re
+
+    assert not re.search(r"[0-9０-９]", MOVE_FIRST_HINT)
+
+
+@then("移動の説明に次の語が含まれる")
+def _t_move_hint_words(pc: PromptCtx, datatable: list[list[str]]) -> None:
+    missing = [row[0] for row in datatable[1:] if row[0] not in MOVE_FIRST_HINT]
+    assert not missing, missing
