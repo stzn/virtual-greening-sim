@@ -266,7 +266,7 @@ PLAN_OBSERVATION_HINT = (
 )
 
 # plan のように、世界側に計画観測を要するプロンプト（選んだ構成にだけ計画観測を有効にする）
-PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan", "plan_early"})
+PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan", "plan_early", "plan_early_move"})
 
 
 def build_plan_prompt(params: Params | None = None) -> str:
@@ -295,11 +295,29 @@ def build_plan_early_prompt(params: Params | None = None) -> str:
     return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
 
 
+# 移動の説明。思考オフの Haiku は、退避の先読みの一文があっても、移動（回数・バッテリー）を温存する資源として扱い、
+# 散水を先にして退避を先送りした。思考オンは同じ判断点で先に退避した。移動は温存するものではないという考え方を1文だけ足す。
+# 数字（時刻・閾値）は含めない。
+MOVE_FIRST_HINT = (
+    "- 移動の回数やバッテリーは、温存するための資源ではない。ピークが予報で見えているなら、"
+    "散水を先にして退避を延ばさず、必要な退避のために使う。\n"
+)
+
+
+def build_plan_early_move_prompt(params: Params | None = None) -> str:
+    """plan_early に、移動の説明を1文だけ足したプロンプト。差分はその1文だけ。"""
+    hints = (
+        PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + EARLY_RETREAT_HINT + MOVE_FIRST_HINT + "\n"
+    )
+    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+
+
 SYSTEM_PROMPT_FREE = build_free_prompt()
 SYSTEM_PROMPT_HYBRID = build_hybrid_prompt()
 SYSTEM_PROMPT_PLAN = build_plan_prompt()
 SYSTEM_PROMPT_EARLY = build_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY = build_plan_early_prompt()
+SYSTEM_PROMPT_PLAN_EARLY_MOVE = build_plan_early_move_prompt()
 
 SYSTEM_PROMPT = SYSTEM_PROMPT_V9
 PROMPTS: dict[str, str] = {
@@ -317,6 +335,7 @@ PROMPTS: dict[str, str] = {
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
     "early": SYSTEM_PROMPT_EARLY,  # hybrid + 退避の先読みの説明（世界は変えない）
     "plan_early": SYSTEM_PROMPT_PLAN_EARLY,  # plan + 退避の先読みの説明（計画観測を有効にする）
+    "plan_early_move": SYSTEM_PROMPT_PLAN_EARLY_MOVE,  # plan_early + 移動は温存しない説明（計画観測を有効にする）
 }
 
 
