@@ -57,3 +57,4 @@
 - [ ] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
 - [x] plan_early_move（移動を温存しない一文）を Haiku 5.5 思考オフで5バリアント比較。思考ありと同等。docs/eval-results.md 2026-11-02 追記。
 - [ ] 一文が不要な退避を誘発しないかを、退避すべきでない状況（normal・rainy 等）で確認／qwen3:14b での再現／散水の失敗（最小量未満）の対処
+- [x] plan_early_move を qwen3:14b 思考オフで5バリアント比較。効果なし（Haiku 固有）。docs/eval-results.md 追記。
