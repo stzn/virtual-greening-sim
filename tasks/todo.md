@@ -59,3 +59,4 @@
 - [ ] 一文が不要な退避を誘発しないかを、退避すべきでない状況（normal・rainy 等）で確認／qwen3:14b での再現／散水の失敗（最小量未満）の対処
 - [x] plan_early_move を qwen3:14b 思考オフで5バリアント比較。効果なし（Haiku 固有）。docs/eval-results.md 追記。
 - [x] plan_early_move を退避が要らない状況（wet_rain / dry_before_rain）で確認。不要な移動は0回。dry_before_rain で plan_early より低い傾向（n=3、原因未確認）。
+- [x] dry_before_rain を5バリアントに増やした。plan_early_move は平均 −4.2（SE 2.5）で、偶然の範囲と区別できない。
