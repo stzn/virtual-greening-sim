@@ -164,3 +164,19 @@ def _no_raise(ctx: Ctx) -> None:
     assert not raised, raised
     assert all(r["ok"] is False for r in ctx.results)
     assert ctx.results, "結果が空"
+
+
+@then(parsers.parse('エラーのヒントに "{a}" と "{b}" が含まれる'))
+def _error_hint_has(ctx: Ctx, a: str, b: str) -> None:
+    hint = ctx.result["error"]["details"]["hint"]
+    assert a in hint and b in hint, hint
+
+
+@then("エラーにヒントは含まれない")
+def _error_no_hint(ctx: Ctx) -> None:
+    assert "hint" not in ctx.result["error"].get("details", {}), ctx.result
+
+
+@then("結果にヒントは含まれない")
+def _result_no_hint(ctx: Ctx) -> None:
+    assert "hint" not in ctx.result, ctx.result
