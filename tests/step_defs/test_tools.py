@@ -186,3 +186,18 @@ def _error_message_plain(ctx: Ctx) -> None:
 @then("結果に message は含まれない")
 def _result_no_message(ctx: Ctx) -> None:
     assert "message" not in ctx.result, ctx.result
+
+
+def _description(ctx: Ctx, name: str) -> str:
+    return next(sp.description for sp in ctx.toolbox.specs if sp.name == name)
+
+
+@then(parsers.parse('ツール "{name}" の説明に "{a}" と "{b}" が含まれる'))
+def _desc_has(ctx: Ctx, name: str, a: str, b: str) -> None:
+    d = _description(ctx, name)
+    assert a in d and b in d, d
+
+
+@then(parsers.parse('ツール "{name}" の説明に "{a}" は含まれない'))
+def _desc_has_not(ctx: Ctx, name: str, a: str) -> None:
+    assert a not in _description(ctx, name)
