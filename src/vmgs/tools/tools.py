@@ -37,7 +37,7 @@ def _error(code: str, message: str, **details: object) -> dict[str, Any]:
 
 
 # 散水の失敗の多くは「50ml 未満の要求」だった。残量が少なくても 50 を指定すれば残量まで散水できるので、
-# 失敗は残したまま（再判断のきっかけを消さずに）、次の一手を添える。
+# 失敗は残したまま（再判断のきっかけを消さずに）、次の一手をエラーの message に添える（details では読まれにくかった）。
 IRRIGATE_MIN_HINT = (
     "散水量は50ml以上で指定します。タンク残量が50ml未満のときは、50を指定すると残量まで散水します"
 )
@@ -119,8 +119,10 @@ class ToolBox:
             args = spec.args_model(**kwargs)
         except ValidationError as e:
             errors = e.errors(include_url=False, include_context=False, include_input=False)
-            extra = {"hint": IRRIGATE_MIN_HINT} if _below_irrigate_min(name, errors) else {}
-            return _error("VALIDATION_ERROR", "引数が不正です", errors=errors, **extra)
+            message = "引数が不正です"
+            if _below_irrigate_min(name, errors):
+                message += f"。{IRRIGATE_MIN_HINT}"
+            return _error("VALIDATION_ERROR", message, errors=errors)
         try:
             return {"ok": True, **spec.handler(args)}
         except WorldError as e:
