@@ -166,17 +166,23 @@ def _no_raise(ctx: Ctx) -> None:
     assert ctx.results, "結果が空"
 
 
-@then(parsers.parse('エラーのヒントに "{a}" と "{b}" が含まれる'))
-def _error_hint_has(ctx: Ctx, a: str, b: str) -> None:
-    hint = ctx.result["error"]["details"]["hint"]
-    assert a in hint and b in hint, hint
+@then(parsers.parse('エラーのメッセージに "{a}" と "{b}" が含まれる'))
+def _error_message_has(ctx: Ctx, a: str, b: str) -> None:
+    message = ctx.result["error"]["message"]
+    assert a in message and b in message, message
 
 
-@then("エラーにヒントは含まれない")
-def _error_no_hint(ctx: Ctx) -> None:
+@then(parsers.parse('エラーのメッセージは "{prefix}" で始まる'))
+def _error_message_starts(ctx: Ctx, prefix: str) -> None:
+    assert ctx.result["error"]["message"].startswith(prefix), ctx.result
+
+
+@then("エラーのメッセージは 従来どおり である")
+def _error_message_plain(ctx: Ctx) -> None:
+    assert ctx.result["error"]["message"] == "引数が不正です", ctx.result
     assert "hint" not in ctx.result["error"].get("details", {}), ctx.result
 
 
-@then("結果にヒントは含まれない")
-def _result_no_hint(ctx: Ctx) -> None:
-    assert "hint" not in ctx.result, ctx.result
+@then("結果に message は含まれない")
+def _result_no_message(ctx: Ctx) -> None:
+    assert "message" not in ctx.result, ctx.result
