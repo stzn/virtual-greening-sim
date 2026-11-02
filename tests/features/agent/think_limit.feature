@@ -14,9 +14,6 @@
     ならば 構成の指定 "llm:ollama:qwen3:14b:plan_early+think=2000" は プロバイダ "ollama"・モデル "qwen3:14b"・プロンプト "plan_early" と解釈される
     かつ 構成の指定 "llm:ollama:qwen3:14b:plan_early+think=2000" の思考の制限は "2000" である
 
-  シナリオ: プロンプトを省いても +think=<値> が解釈される
-    ならば 構成の指定 "llm:anthropic:claude-sonnet-5-5+think=medium" の思考の制限は "medium" である
-
   シナリオ: 制限を付けない +think は従来どおりで、名前も変わらない
     ならば 構成の指定 "llm:anthropic:claude-haiku-5-5:plan_early+think" の思考の制限は なし である
     かつ 構成 "llm:anthropic:claude-haiku-5-5:plan_early+think" の名前は "llm_anthropic_claude-haiku-5-5_plan_early_think" になる

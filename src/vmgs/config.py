@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # Claude の拡張思考。None は未指定（thinking を送らない）。構成の +think で adaptive、無しで disabled にする
     anthropic_thinking: Literal["adaptive", "disabled"] | None = None
 
+    # 思考の長さの制限（None は制限なし）。Anthropic は effort、Ollama は出力トークン数の上限（思考の途中で切れうる）
+    anthropic_effort: Literal["low", "medium", "high"] | None = None
+    ollama_num_predict: int | None = None
+
     # LangSmith（外部サービスへ送信する。既定はオフ。obs/tracing.py で解決する）
     langsmith_tracing: bool = False
     langsmith_api_key: str | None = None

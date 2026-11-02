@@ -93,7 +93,12 @@ def cmd_turn(args: argparse.Namespace) -> int:
 RUNS_DIR = Path("runs")
 
 
-def _llm_settings(provider: str | None, model: str | None, reasoning: bool = False) -> Settings:
+def _llm_settings(
+    provider: str | None,
+    model: str | None,
+    reasoning: bool = False,
+    think_limit: str | None = None,
+) -> Settings:
     overrides: dict[str, object] = {}
     if provider:
         overrides["llm_provider"] = provider
@@ -101,10 +106,14 @@ def _llm_settings(provider: str | None, model: str | None, reasoning: bool = Fal
         overrides["llm_model"] = model
     if Settings(**overrides).llm_provider == "anthropic":  # type: ignore[arg-type]
         overrides["anthropic_thinking"] = "adaptive" if reasoning else "disabled"
+        if think_limit:
+            overrides["anthropic_effort"] = think_limit
     elif reasoning:
         # 思考モードは長く（または循環して）実験全体を止めうるので、タイムアウトを付ける
         overrides["ollama_reasoning"] = True
         overrides["ollama_timeout_s"] = THINK_TIMEOUT_S
+        if think_limit:
+            overrides["ollama_num_predict"] = int(think_limit)
     return Settings(**overrides)  # type: ignore[arg-type]
 
 
@@ -114,12 +123,13 @@ def _agent_factory(
     model: str | None,
     prompt: str | None = None,
     reasoning: bool = False,
+    think_limit: str | None = None,
 ) -> AgentFactory:
     if name == "baseline":
         return BaselineAgent
     if name == "noop":
         return NoopAgent
-    chat = make_chat_model(_llm_settings(provider, model, reasoning))
+    chat = make_chat_model(_llm_settings(provider, model, reasoning, think_limit))
     system_prompt = PROMPTS[prompt] if prompt else SYSTEM_PROMPT
     return lambda world: AgentRunner(chat, world, system_prompt=system_prompt)
 
@@ -130,6 +140,7 @@ def _agent_info(
     model: str | None,
     prompt: str | None,
     reasoning: bool = False,
+    think_limit: str | None = None,
 ) -> dict[str, str] | None:
     """実行の設定(run.json)とトレースのメタデータに残す、LLMの識別情報。"""
     if name in ("baseline", "noop"):
@@ -142,6 +153,8 @@ def _agent_info(
     }
     if reasoning:
         info["reasoning"] = "true"  # 思考オフの識別情報にはキーを足さない（従来と同一）
+    if think_limit:
+        info["think_limit"] = think_limit
     return info
 
 
@@ -328,7 +341,10 @@ def cmd_experiment(args: argparse.Namespace) -> int:
             # モデルの生成は実行時まで遅らせる（APIキー未設定などは、その構成だけの失敗として記録される）
             configs[name] = _lazy_llm_factory(spec)
             infos[name] = (
-                _agent_info("llm", spec.provider, spec.model, spec.prompt, spec.reasoning) or {}
+                _agent_info(
+                    "llm", spec.provider, spec.model, spec.prompt, spec.reasoning, spec.think_limit
+                )
+                or {}
             )
         else:
             configs[name] = _agent_factory(spec.kind, None, None)
@@ -379,7 +395,10 @@ def _cmd_suite(args: argparse.Namespace) -> int:
         if spec.kind == "llm":
             configs[name] = _lazy_llm_factory(spec)
             infos[name] = (
-                _agent_info("llm", spec.provider, spec.model, spec.prompt, spec.reasoning) or {}
+                _agent_info(
+                    "llm", spec.provider, spec.model, spec.prompt, spec.reasoning, spec.think_limit
+                )
+                or {}
             )
         else:
             configs[name] = _agent_factory(spec.kind, None, None)
@@ -410,7 +429,9 @@ def _cmd_suite(args: argparse.Namespace) -> int:
 
 def _lazy_llm_factory(spec: ConfigSpec) -> AgentFactory:
     def make(world: World) -> TurnAgent:
-        return _agent_factory("llm", spec.provider, spec.model, spec.prompt, spec.reasoning)(world)
+        return _agent_factory(
+            "llm", spec.provider, spec.model, spec.prompt, spec.reasoning, spec.think_limit
+        )(world)
 
     return make
 

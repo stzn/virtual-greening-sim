@@ -29,6 +29,7 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
             temperature=0,
             base_url=settings.ollama_base_url,
             reasoning=settings.ollama_reasoning,
+            num_predict=settings.ollama_num_predict,
             client_kwargs=(
                 {"timeout": settings.ollama_timeout_s} if settings.ollama_timeout_s else {}
             ),
@@ -51,6 +52,7 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
         model_name=settings.llm_model,
         temperature=temperature,
         thinking=thinking,
+        effort=settings.anthropic_effort,
         api_key=SecretStr(settings.anthropic_api_key),
         timeout=None,
         stop=None,
