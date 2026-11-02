@@ -460,7 +460,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         sp.add_argument("--hours", type=int, help="シミュレーション時間（既定: 24 / preset の値）")
         sp.add_argument("--spot", choices=["A", "B", "C"])
-        sp.add_argument("--moisture", type=float, help="初期の土壌水分[%]")
+        sp.add_argument("--moisture", type=float, help="初期の土壌水分[%%]")
         sp.add_argument("--provider", choices=["openai", "anthropic", "ollama"])
         sp.add_argument("--model")
         sp.add_argument(
