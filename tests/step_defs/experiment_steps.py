@@ -72,6 +72,7 @@ class ExCtx:
         self.pair_results: dict[str, tuple[int, int, int]] = {}
         self.condition: Condition | None = None
         self.planning_configs: set[str] = set()
+        self.truncate_irrigation = True
         self.suite_results: list[SuiteResult] = []
         self._suite_mode = False
 
@@ -106,6 +107,7 @@ class ExCtx:
             hours=cond.hours if cond else 24,
             base=cond.base if cond else BaseConditions(),
             planning_configs=set(self.planning_configs),
+            truncate_irrigation=self.truncate_irrigation,
         )
 
     def run(self, **kwargs: Any) -> ExperimentResult:
@@ -132,6 +134,7 @@ class ExCtx:
                 variants=self.variants,
                 seed=self.seed,
                 planning_configs=set(self.planning_configs),
+                truncate_irrigation=self.truncate_irrigation,
                 **kwargs,
             )
         except Exception as e:
@@ -559,6 +562,11 @@ def _g_planning(ex: ExCtx, c: str) -> None:
     ex.planning_configs.add(c)
 
 
+@given("散水の切り詰めを無効にして実験する")
+def _g_no_truncate(ex: ExCtx) -> None:
+    ex.truncate_irrigation = False
+
+
 def _run_dirs(ex: ExCtx, cfg: str) -> list[Path]:
     prefix = f"{ex.name}_{cfg}_v"
     dirs = sorted(p for p in ex.sc.runs_dir.iterdir() if p.name.startswith(prefix))
@@ -568,6 +576,10 @@ def _run_dirs(ex: ExCtx, cfg: str) -> list[Path]:
 
 def _planning_flag(run_dir: Path) -> bool:
     return bool(RunStore(run_dir).read_meta()["config"]["planning_observations"])
+
+
+def _truncate_flag(run_dir: Path) -> bool:
+    return bool(RunStore(run_dir).read_meta()["config"]["truncate_irrigation"])
 
 
 def _has_obs(run_dir: Path) -> bool:
@@ -592,6 +604,23 @@ def _t_cfg_enabled(ex: ExCtx, c: str) -> None:
 @then(parsers.parse('構成 "{c}" の全ての実行で計画観測は無効である'))
 def _t_cfg_disabled(ex: ExCtx, c: str) -> None:
     assert not any(_planning_flag(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行で散水の切り詰めが有効である'))
+def _t_trunc_on(ex: ExCtx, c: str) -> None:
+    assert all(_truncate_flag(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('構成 "{c}" の全ての実行で散水の切り詰めが無効である'))
+def _t_trunc_off(ex: ExCtx, c: str) -> None:
+    assert not any(_truncate_flag(d) for d in _run_dirs(ex, c))
+
+
+@then(parsers.parse('全ての状況で構成 "{c}" の実行は散水の切り詰めが無効である'))
+def _t_suite_trunc_off(ex: ExCtx, c: str) -> None:
+    dirs = _suite_run_dirs(ex, c)
+    assert dirs
+    assert not any(_truncate_flag(d) for d in dirs)
 
 
 @then(parsers.parse('構成 "{c}" の全ての実行のツール結果に計画観測が含まれる'))
