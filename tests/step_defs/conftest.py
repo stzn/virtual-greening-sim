@@ -2,6 +2,7 @@
 
 import re
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -316,6 +317,11 @@ def _t_unchanged_world(ctx: Ctx) -> None:
     now = ctx.snapshot()
     assert now["soil_moisture_pct"] == pytest.approx(ctx.before["soil_moisture_pct"])
     assert now["water_tank_ml"] == ctx.before["water_tank_ml"]
+
+
+@given("散水の切り詰めは無効である")
+def _g_no_truncate(ctx: Ctx) -> None:
+    ctx.world.params = replace(ctx.world.params, truncate_irrigation=False)
 
 
 @then(parsers.parse("散水は 要求 {r:d}ml・実際 {a:d}ml で切り詰められた"))
