@@ -25,6 +25,7 @@ from vmgs.sim.records import Checkpoint, StepRecord, plant_from_dict, plant_to_d
 from vmgs.sim.store import RunStore
 from vmgs.weather.providers import SeriesWeather, WeatherUnavailableError
 from vmgs.world.clock import SimClock
+from vmgs.world.params import Params
 from vmgs.world.plant import UnitStatus
 from vmgs.world.world import World
 
@@ -55,6 +56,8 @@ class SimConfig(BaseModel):
     initial_tank_ml: int | None = None
     # 計画観測（残り時間あたりの水・電池）を get_plant_state に返す。既定はオフで、オフなら出力は変わらない
     planning_observations: bool = False
+    # 残量を超える散水を残量までに切り詰める。False なら INSUFFICIENT_WATER で拒否（切り詰め導入前の挙動）
+    truncate_irrigation: bool = True
 
 
 @dataclass
@@ -90,6 +93,7 @@ def _build_world(config: SimConfig, weather: SeriesWeather, store: RunStore) -> 
         # 終了時刻は設定（開始時刻 + 時間数）から決める。再開しても同じ値になる
         horizon_end=config.start_time + timedelta(hours=config.hours),
         planning_observations=config.planning_observations,
+        params=Params(truncate_irrigation=config.truncate_irrigation),
     )
     p = world.plant
     if config.initial_moisture is not None:

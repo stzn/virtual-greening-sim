@@ -350,6 +350,7 @@ def cmd_experiment(args: argparse.Namespace) -> int:
         base=base,
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
+        truncate_irrigation=not args.no_truncate,
     )
     result = run_experiment(exp_spec, weather, RUNS_DIR, max_runs=args.max_runs)
     print(result.report_md)
@@ -398,6 +399,7 @@ def _cmd_suite(args: argparse.Namespace) -> int:
         max_runs=args.max_runs,
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
+        truncate_irrigation=not args.no_truncate,
     )
     print(result.summary_md)
     print(
@@ -516,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
     ex.add_argument(
         "--conditions",
         help="--suite の状況をカンマ区切りで絞り込む（例: dry_before_rain,wet_rain）",
+    )
+    ex.add_argument(
+        "--no-truncate",
+        action="store_true",
+        help="残量を超える散水を切り詰めず、INSUFFICIENT_WATER で拒否する（切り詰め導入前の条件）",
     )
     ex.add_argument("--max-runs", type=int, help="この呼び出しで新たに実行する件数の上限")
     ex.add_argument("--trace", action="store_true", help="LangSmith へトレースを送る")

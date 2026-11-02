@@ -273,6 +273,13 @@ class World:
                 requested_ml=amount_ml,
                 water_tank_ml=p.water_tank_ml,
             )
+        if not params.truncate_irrigation and amount_ml > p.water_tank_ml:
+            raise WorldError(
+                "INSUFFICIENT_WATER",
+                f"タンク残量が足りません（要求 {amount_ml}ml・残り {p.water_tank_ml}ml）",
+                requested_ml=amount_ml,
+                water_tank_ml=p.water_tank_ml,
+            )
         # 要求が残量を超えるときは、エラーにせず残量までに切り詰めて実行する
         # （エラーは「何も起きず時間だけ過ぎる」無駄な呼び出しになるため）
         applied = min(amount_ml, p.water_tank_ml)

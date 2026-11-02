@@ -53,7 +53,8 @@
   - [x] plan_early+think 3バリアント: 平均80.6（hybrid+think 80.3、plan+think 73.5）。退避前倒し(04/00/02時)と夜間散水・失敗の抑制は両立。成果はhybrid+thinkと同等。385テスト緑・変異3件
   - [x] バリアント5件で確認: hybrid+think 82.9、plan_early+think 81.3、baseline 74.0。思考オンは baseline に4勝（比2.4〜2.8）、2構成の間に差なし(−1.6±2.1)
   - [x] 別モデル（Haiku・Sonnet、上の項目）／思考オフを5件に揃える（Haiku・qwen3）
-  - [ ] 思考の長さの制限／切り詰めのオプション化（未着手）
+  - [x] 切り詰めのオプション化: Params.truncate_irrigation（既定オン）、SimConfig・実験・スイート、CLI `vmgs experiment --no-truncate`。BDD+変異6件検出（M4 は世界への反映を確かめるシナリオを足して検出）。417テスト緑
+  - [ ] 思考の長さの制限（未着手）
 - [x] 別モデル（Claude Haiku 5.5）で scarce_water を5バリアント比較（stress5）。結果は docs/eval-results.md 2026-11-02。
 - [x] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
 - [x] plan_early_move（移動を温存しない一文）を Haiku 5.5 思考オフで5バリアント比較。思考ありと同等。docs/eval-results.md 2026-11-02 追記。

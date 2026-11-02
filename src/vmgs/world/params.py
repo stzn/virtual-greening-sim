@@ -45,5 +45,8 @@ class Params:
     heat_threshold_c: float = 30.0  # これを超えた分が「冷却需要」
     sun_full_w_m2: float = 600.0  # 地表加熱が最大になる日射量
 
+    # 要求がタンク残量を超える散水を、残量までに切り詰めて実行する。False なら INSUFFICIENT_WATER で拒否（切り詰め導入前の挙動）
+    truncate_irrigation: bool = True
+
     initial_moisture: float = 60.0
     initial_tank_ml: int = 10_000
