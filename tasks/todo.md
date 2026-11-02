@@ -52,18 +52,21 @@
   - [x] plan+think 3バリアント: 平均73.5（思考オフplan 54.0、hybrid+think 80.3）、baseline 2勝1敗。夜間散水が消え散水失敗0、計画観測が散水量に使われた。退避は遅く(07/03/07時)hybrid+thinkに届かず
   - [x] plan_early+think 3バリアント: 平均80.6（hybrid+think 80.3、plan+think 73.5）。退避前倒し(04/00/02時)と夜間散水・失敗の抑制は両立。成果はhybrid+thinkと同等。385テスト緑・変異3件
   - [x] バリアント5件で確認: hybrid+think 82.9、plan_early+think 81.3、baseline 74.0。思考オンは baseline に4勝（比2.4〜2.8）、2構成の間に差なし(−1.6±2.1)
-  - [ ] 別モデル／思考オフを5件に揃える／思考の長さの制限／切り詰めのオプション化
+  - [x] 別モデル（Haiku・Sonnet、上の項目）／思考オフを5件に揃える（Haiku・qwen3）
+  - [ ] 思考の長さの制限／切り詰めのオプション化（未着手）
 - [x] 別モデル（Claude Haiku 5.5）で scarce_water を5バリアント比較（stress5）。結果は docs/eval-results.md 2026-11-02。
-- [ ] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
+- [x] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
 - [x] plan_early_move（移動を温存しない一文）を Haiku 5.5 思考オフで5バリアント比較。思考ありと同等。docs/eval-results.md 2026-11-02 追記。
-- [ ] 一文が不要な退避を誘発しないかを、退避すべきでない状況（normal・rainy 等）で確認／qwen3:14b での再現／散水の失敗（最小量未満）の対処
+- [x] 一文が不要な退避を誘発しないかを、退避すべきでない状況（normal・rainy 等）で確認／qwen3:14b での再現／散水の失敗（最小量未満）の対処
 - [x] plan_early_move を qwen3:14b 思考オフで5バリアント比較。効果なし（Haiku 固有）。docs/eval-results.md 追記。
 - [x] plan_early_move を退避が要らない状況（wet_rain / dry_before_rain）で確認。不要な移動は0回。dry_before_rain で plan_early より低い傾向（n=3、原因未確認）。
 - [x] dry_before_rain を5バリアントに増やした。plan_early_move は平均 −4.2（SE 2.5）で、偶然の範囲と区別できない。
 - [x] plan_early_move を tradeoff（Haiku、5バリアント）で確認。効果なし、退避は遅い傾向（SE 内）。思考ありは安定。docs/eval-results.md 2026-11-03。
 - [x] 散水の最小量未満エラーにヒントを追加（d9e4c2d）、stress8 で確認。ヒントが使われたのは失敗6件中1件。
-- [ ] ヒントを message に入れる／ツールの説明文に書くかを検討（ヒントを読ませる方法）
+- [x] ヒントを message に入れる／ツールの説明文に書くかを検討（ヒントを読ませる方法）
 - [x] ヒントを message に移した（1cfcc9a）。失敗の直後に 50 を指定して回復した割合が 1/6 → 6/7。最終健康度の改善は確認できず。docs/eval-results.md 追記。
 - [x] irrigate の説明に残量が少ないときの指定の仕方を追記（dd79e16）。残量が少ないときの最小量未満の要求は 5 件 → 0 件。残りは「少量を狙って 30〜40ml を要求」する別の原因。
 - [x] 残った最小量未満の要求の原因を全文で確認: 水の温存を優先して少量（30〜40ml）を狙う判断。失敗は1回で回復し、健康度への影響は見られないため、これ以上は対処しない。
 - [x] Sonnet 5.5（思考あり、3構成×5バリアント、stress12）で比較。plan_early 系は全5件で baseline を上回り、退避は0〜2時。plan_early_move と plan_early の差は +1.3 で区別できない。費用 $10.58。思考オフは API が拒否するため不可。docs/eval-results.md 2026-11-04 追記。
+- [x] Sonnet 5.5（思考あり）で3構成×5を比較（stress12）、判断理由の全文を確認、まとめと Artifact を更新。思考オフは API が拒否するため不可。
+- [ ] 一文を OpenAI 系で試す（API キーの設定が要る）
