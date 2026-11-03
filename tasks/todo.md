@@ -56,7 +56,7 @@
   - [x] 切り詰めのオプション化: Params.truncate_irrigation（既定オン）、SimConfig・実験・スイート、CLI `vmgs experiment --no-truncate`。BDD+変異6件検出（M4 は世界への反映を確かめるシナリオを足して検出）。417テスト緑
   - [x] 思考の長さの制限: 構成に `+think=<値>`（Anthropic は effort の low/medium/high、Ollama は出力トークン数の上限 num_predict）。指定なしは従来どおり。識別情報には制限があるときだけ `think_limit` を残す。effort=low は Haiku 5.5・Sonnet 5.5 の API が受理することを確認（各1回）。
   - [x] Haiku の effort での実測（stress13）: 健康度は変わらず（81.4/81.5/80.8）、low で出力 約18%減。詳細は eval-results.md
-  - [ ] Ollama の num_predict の実測（値の検討が要る）
+  - [x] Ollama の num_predict の実測（stress15）: 1000 は成績同等で時間も同じ、500 は思考が切れて行動が出ず崩壊（健康度 10.1）。詳細は eval-results.md
 - [x] 別モデル（Claude Haiku 5.5）で scarce_water を5バリアント比較（stress5）。結果は docs/eval-results.md 2026-11-02。
 - [x] 思考オフの比較を Haiku でも plan_early 単独で（思考の寄与の分離）／qwen3 と Haiku の差の原因（思考の中身）の確認
 - [x] plan_early_move（移動を温存しない一文）を Haiku 5.5 思考オフで5バリアント比較。思考ありと同等。docs/eval-results.md 2026-11-02 追記。
