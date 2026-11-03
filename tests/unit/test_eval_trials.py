@@ -1,3 +1,4 @@
+import pytest
 from langchain_core.messages import AIMessage
 
 from vmgs.agent.fake import ScriptedChatModel, tool_call_message
@@ -14,6 +15,7 @@ from vmgs.eval.trials import (
     not_called,
     run_trials,
     success_count,
+    vary_setup,
 )
 
 
@@ -97,3 +99,60 @@ def test_build_world_は移動予算の消費を反映する() -> None:
     w = build_world(TrialSetup(spot="A", recent_moves_hours_ago=[3, 7]))
     st = w.state()
     assert (st.moves_in_window, st.move_budget_remaining) == (2, 0)
+
+
+# ---- 試行ごとの条件の揺らぎ（temperature=0 で5回が同一になるのを避ける） ----
+_BASE = TrialSetup(spot="C", moisture=35, tank_ml=8000, battery_pct=70, temperature_c=34)
+
+
+def test_揺らぎの試行0は条件そのまま() -> None:
+    assert vary_setup(_BASE, seed=0, index=0) == _BASE
+
+
+def test_揺らぎは試行ごとに変わり同じシードと番号なら同一() -> None:
+    a, b = vary_setup(_BASE, 0, 1), vary_setup(_BASE, 0, 2)
+    assert a != _BASE and a != b
+    assert vary_setup(_BASE, 0, 1) == a
+    assert vary_setup(_BASE, 1, 1) != a
+
+
+def test_揺らぎは判断の閾値に関わる条件を変えない() -> None:
+    for i in range(1, 30):
+        v = vary_setup(_BASE, 0, i)
+        assert (v.moisture, v.tank_ml, v.temperature_c, v.shortwave_w_m2, v.spot) == (
+            _BASE.moisture,
+            _BASE.tank_ml,
+            _BASE.temperature_c,
+            _BASE.shortwave_w_m2,
+            _BASE.spot,
+        )
+
+
+def test_揺らぎは風_湿度_バッテリーを小さな範囲で変える() -> None:
+    vs = [vary_setup(_BASE, 0, i) for i in range(1, 30)]
+    assert all(abs(v.wind_ms - _BASE.wind_ms) <= 0.5 and v.wind_ms >= 0 for v in vs)
+    assert all(abs(v.humidity_pct - _BASE.humidity_pct) <= 5 for v in vs)
+    assert all(abs(v.battery_pct - _BASE.battery_pct) <= 3 for v in vs)
+    assert len({v.battery_pct for v in vs}) > 1
+
+
+def test_バッテリーは15パーセントの閾値の同じ側にとどまり100を超えない() -> None:
+    for base, low in ((8.0, True), (16.0, False), (100.0, False)):
+        for i in range(1, 60):
+            b = vary_setup(TrialSetup(battery_pct=base), 0, i).battery_pct
+            assert b <= 100
+            assert (b < 15) is low
+
+
+def test_run_trials_は試行ごとに揺らした条件で世界を作る(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[float] = []
+    real = build_world
+
+    def spy(setup: TrialSetup):  # type: ignore[no-untyped-def]
+        seen.append(setup.battery_pct)
+        return real(setup)
+
+    monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
+    model = ScriptedChatModel([AIMessage(content="{}")] * 4)
+    run_trials(model, TrialSetup(battery_pct=70), n=4)
+    assert seen[0] == 70 and len(set(seen)) > 1
