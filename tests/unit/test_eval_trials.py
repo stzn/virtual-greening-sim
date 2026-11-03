@@ -137,7 +137,7 @@ def test_揺らぎは風_湿度_バッテリーを小さな範囲で変える() 
 
 
 def test_バッテリーは15パーセントの閾値の同じ側にとどまり100を超えない() -> None:
-    for base, low in ((8.0, True), (16.0, False), (100.0, False)):
+    for base, low in ((8.0, True), (14.0, True), (16.0, False), (100.0, False)):
         for i in range(1, 60):
             b = vary_setup(TrialSetup(battery_pct=base), 0, i).battery_pct
             assert b <= 100
@@ -153,6 +153,6 @@ def test_run_trials_は試行ごとに揺らした条件で世界を作る(monke
         return real(setup)
 
     monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
-    model = ScriptedChatModel([AIMessage(content="{}")] * 4)
+    model = ScriptedChatModel(responses=[AIMessage(content="維持")])  # 最後の応答を繰り返す
     run_trials(model, TrialSetup(battery_pct=70), n=4)
     assert seen[0] == 70 and len(set(seen)) > 1

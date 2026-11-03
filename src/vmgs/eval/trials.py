@@ -1,8 +1,9 @@
 """LLM判断品質の評価基盤。同じ状況で N 回判断させ、行動の述語を満たした回数で合否を決める。"""
 
+import random
 import tempfile
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -20,6 +21,13 @@ from vmgs.world.world import World
 EVAL_START = datetime(2025, 8, 1, 13, 0)
 DEFAULT_TRIALS = 5
 SIDE_EFFECT_TOOLS = {"move_to_spot", "irrigate"}
+
+# 試行ごとの条件の揺らぎ。判断の閾値（水分30/40/50/70・気温33・日射700）に関わる条件は変えず、
+# 判断の正解を変えない範囲で、入力だけを少し変える（temperature=0 でも試行が同一にならないように）
+WIND_JITTER = 0.5  # 風速 ± [m/s]
+HUMIDITY_JITTER = 5.0  # 湿度 ± [%]
+BATTERY_JITTER = 3.0  # バッテリー ± [%]
+BATTERY_THRESHOLD = 15.0  # 判断ルールのバッテリー閾値（同じ側にとどめる）
 
 
 @dataclass
@@ -85,16 +93,42 @@ def build_world(setup: TrialSetup) -> World:
     return world
 
 
+def vary_setup(setup: TrialSetup, seed: int, index: int) -> TrialSetup:
+    """index=0 は条件そのまま。それ以外は (seed, index) から決定論的に、風・湿度・バッテリーを少し変える。"""
+    if index == 0:
+        return setup
+    rng = random.Random(f"{seed}:{index}")
+    battery = setup.battery_pct + rng.uniform(-BATTERY_JITTER, BATTERY_JITTER)
+    if setup.battery_pct >= BATTERY_THRESHOLD:
+        battery = max(battery, BATTERY_THRESHOLD)
+    else:
+        battery = min(battery, BATTERY_THRESHOLD - 0.1)
+    return replace(
+        setup,
+        wind_ms=round(max(0.0, setup.wind_ms + rng.uniform(-WIND_JITTER, WIND_JITTER)), 2),
+        humidity_pct=round(
+            min(
+                100.0, max(0.0, setup.humidity_pct + rng.uniform(-HUMIDITY_JITTER, HUMIDITY_JITTER))
+            ),
+            1,
+        ),
+        battery_pct=round(min(100.0, max(0.0, battery)), 1),
+    )
+
+
 def run_trials(
     model: BaseChatModel,
     setup: TrialSetup,
     n: int = DEFAULT_TRIALS,
     system_prompt: str = SYSTEM_PROMPT,
+    seed: int = 0,
 ) -> list[TurnResult]:
-    """試行ごとに新しい World・Runner で1ターン判断させる（試行間の影響を排除）。"""
+    """試行ごとに新しい World・Runner で1ターン判断させる（試行間の影響を排除）。条件は試行ごとに少し揺らす。"""
     results: list[TurnResult] = []
-    for _ in range(n):
-        runner = AgentRunner(model, build_world(setup), system_prompt=system_prompt)
+    for i in range(n):
+        runner = AgentRunner(
+            model, build_world(vary_setup(setup, seed, i)), system_prompt=system_prompt
+        )
         runner.history = list(setup.history)
         results.append(runner.run_turn())
     return results
