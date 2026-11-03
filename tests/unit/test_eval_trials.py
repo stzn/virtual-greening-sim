@@ -116,28 +116,53 @@ def test_揺らぎは試行ごとに変わり同じシードと番号なら同�
     assert vary_setup(_BASE, 1, 1) != a
 
 
-def test_揺らぎは判断の閾値に関わる条件を変えない() -> None:
+def test_揺らぎはスポットとタンクを変えない() -> None:
     for i in range(1, 30):
         v = vary_setup(_BASE, 0, i)
-        assert (v.moisture, v.tank_ml, v.temperature_c, v.shortwave_w_m2, v.spot) == (
-            _BASE.moisture,
-            _BASE.tank_ml,
-            _BASE.temperature_c,
-            _BASE.shortwave_w_m2,
-            _BASE.spot,
-        )
+        assert (v.tank_ml, v.spot) == (_BASE.tank_ml, _BASE.spot)
 
 
-def test_揺らぎは風_湿度_バッテリーを小さな範囲で変える() -> None:
+def test_揺らぎは水分_気温_日射_風_湿度_バッテリーを変える() -> None:
     vs = [vary_setup(_BASE, 0, i) for i in range(1, 30)]
-    assert all(abs(v.wind_ms - _BASE.wind_ms) <= 0.5 and v.wind_ms >= 0 for v in vs)
-    assert all(abs(v.humidity_pct - _BASE.humidity_pct) <= 5 for v in vs)
-    assert all(abs(v.battery_pct - _BASE.battery_pct) <= 3 for v in vs)
-    assert len({v.battery_pct for v in vs}) > 1
+    for field in (
+        "moisture",
+        "temperature_c",
+        "shortwave_w_m2",
+        "wind_ms",
+        "humidity_pct",
+        "battery_pct",
+    ):
+        assert len({getattr(v, field) for v in vs}) > 1, field
+    assert all(abs(v.moisture - _BASE.moisture) <= 5 for v in vs)
+    assert all(abs(v.temperature_c - _BASE.temperature_c) <= 2 for v in vs)
+    assert all(
+        abs(v.shortwave_w_m2 - _BASE.shortwave_w_m2) <= _BASE.shortwave_w_m2 * 0.1 for v in vs
+    )
+    assert all(abs(v.wind_ms - _BASE.wind_ms) <= 1.5 and v.wind_ms >= 0 for v in vs)
+    assert all(abs(v.humidity_pct - _BASE.humidity_pct) <= 15 for v in vs)
+    assert all(abs(v.battery_pct - _BASE.battery_pct) <= 8 for v in vs)
+
+
+def _side(value: float, thresholds: tuple[float, ...]) -> tuple[bool, ...]:
+    return tuple(value >= t for t in thresholds)
+
+
+def test_揺らぎは判断ルールの閾値をまたがない() -> None:
+    """水分 30/40/50/70/85・気温 33・日射 700 は、元の値と同じ側にとどまる（境界上の値も）。"""
+    for m in (15.0, 25.0, 29.5, 30.0, 35.0, 40.0, 50.0, 55.0, 70.0, 84.0, 90.0):
+        for t in (26.0, 32.5, 33.0, 36.0):
+            for sw in (200.0, 699.0, 700.0, 900.0):
+                base = TrialSetup(moisture=m, temperature_c=t, shortwave_w_m2=sw)
+                for i in range(1, 25):
+                    v = vary_setup(base, 0, i)
+                    assert _side(v.moisture, (30, 40, 50, 70, 85)) == _side(m, (30, 40, 50, 70, 85))
+                    assert _side(v.temperature_c, (33,)) == _side(t, (33,))
+                    assert _side(v.shortwave_w_m2, (700,)) == _side(sw, (700,))
+                    assert 0 <= v.moisture <= 100
 
 
 def test_バッテリーは15パーセントの閾値の同じ側にとどまり100を超えない() -> None:
-    for base, low in ((8.0, True), (14.0, True), (16.0, False), (100.0, False)):
+    for base, low in ((8.0, True), (14.0, True), (15.0, False), (16.0, False), (100.0, False)):
         for i in range(1, 60):
             b = vary_setup(TrialSetup(battery_pct=base), 0, i).battery_pct
             assert b <= 100
