@@ -181,3 +181,12 @@ def test_run_trials_は試行ごとに揺らした条件で世界を作る(monke
     model = ScriptedChatModel(responses=[AIMessage(content="維持")])  # 最後の応答を繰り返す
     run_trials(model, TrialSetup(battery_pct=70), n=4)
     assert seen[0] == 70 and len(set(seen)) > 1
+
+
+def test_揺らぎは湿度と水分と風速を範囲内に収める() -> None:
+    for i in range(1, 60):
+        v = vary_setup(TrialSetup(humidity_pct=98, moisture=99, wind_ms=0.2, battery_pct=2), 0, i)
+        assert 0 <= v.humidity_pct <= 100
+        assert 0 <= v.moisture <= 100
+        assert v.wind_ms >= 0
+        assert 0 <= v.battery_pct < 15

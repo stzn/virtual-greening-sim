@@ -22,12 +22,19 @@ EVAL_START = datetime(2025, 8, 1, 13, 0)
 DEFAULT_TRIALS = 5
 SIDE_EFFECT_TOOLS = {"move_to_spot", "irrigate"}
 
-# 試行ごとの条件の揺らぎ。判断の閾値（水分30/40/50/70・気温33・日射700）に関わる条件は変えず、
-# 判断の正解を変えない範囲で、入力だけを少し変える（temperature=0 でも試行が同一にならないように）
-WIND_JITTER = 0.5  # 風速 ± [m/s]
-HUMIDITY_JITTER = 5.0  # 湿度 ± [%]
-BATTERY_JITTER = 3.0  # バッテリー ± [%]
-BATTERY_THRESHOLD = 15.0  # 判断ルールのバッテリー閾値（同じ側にとどめる）
+# 試行ごとの条件の揺らぎ。判断ルールの閾値（水分30/40/50/70/85・気温33・日射700・バッテリー15）は、
+# 元の値と同じ側にとどめる（判断の正解を変えない）。その範囲で入力だけを変え、temperature=0 でも試行が同一にならないようにする
+MOISTURE_JITTER = 5.0  # 土壌水分 ± [%]
+TEMPERATURE_JITTER = 2.0  # 気温 ± [℃]
+SHORTWAVE_JITTER_RATIO = 0.1  # 日射 ± 10%
+WIND_JITTER = 1.5  # 風速 ± [m/s]
+HUMIDITY_JITTER = 15.0  # 湿度 ± [%]
+BATTERY_JITTER = 8.0  # バッテリー ± [%]
+MOISTURE_THRESHOLDS = (30.0, 40.0, 50.0, 70.0, 85.0)
+TEMPERATURE_THRESHOLDS = (33.0,)
+SHORTWAVE_THRESHOLDS = (700.0,)
+BATTERY_THRESHOLDS = (15.0,)
+_EPS = 0.01
 
 
 @dataclass
@@ -93,26 +100,41 @@ def build_world(setup: TrialSetup) -> World:
     return world
 
 
+def _jitter(
+    rng: random.Random,
+    base: float,
+    amplitude: float,
+    thresholds: tuple[float, ...] = (),
+    lo: float = 0.0,
+    hi: float = float("inf"),
+) -> float:
+    """base を ±amplitude で揺らす。閾値に対して base と同じ側（>= か <）にとどめ、[lo, hi] に収める。"""
+    value = base + rng.uniform(-amplitude, amplitude)
+    lower = max((t for t in thresholds if t <= base), default=lo)
+    upper = min((t for t in thresholds if t > base), default=hi + _EPS) - _EPS
+    return round(min(max(value, lower, lo), upper, hi), 2)
+
+
 def vary_setup(setup: TrialSetup, seed: int, index: int) -> TrialSetup:
-    """index=0 は条件そのまま。それ以外は (seed, index) から決定論的に、風・湿度・バッテリーを少し変える。"""
+    """index=0 は条件そのまま。それ以外は (seed, index) から決定論的に、気象・水分・バッテリーを少し変える。"""
     if index == 0:
         return setup
     rng = random.Random(f"{seed}:{index}")
-    battery = setup.battery_pct + rng.uniform(-BATTERY_JITTER, BATTERY_JITTER)
-    if setup.battery_pct >= BATTERY_THRESHOLD:
-        battery = max(battery, BATTERY_THRESHOLD)
-    else:
-        battery = min(battery, BATTERY_THRESHOLD - 0.1)
     return replace(
         setup,
-        wind_ms=round(max(0.0, setup.wind_ms + rng.uniform(-WIND_JITTER, WIND_JITTER)), 2),
-        humidity_pct=round(
-            min(
-                100.0, max(0.0, setup.humidity_pct + rng.uniform(-HUMIDITY_JITTER, HUMIDITY_JITTER))
-            ),
-            1,
+        moisture=_jitter(rng, setup.moisture, MOISTURE_JITTER, MOISTURE_THRESHOLDS, 0.0, 100.0),
+        temperature_c=_jitter(
+            rng, setup.temperature_c, TEMPERATURE_JITTER, TEMPERATURE_THRESHOLDS, -50.0, 60.0
         ),
-        battery_pct=round(min(100.0, max(0.0, battery)), 1),
+        shortwave_w_m2=_jitter(
+            rng,
+            setup.shortwave_w_m2,
+            setup.shortwave_w_m2 * SHORTWAVE_JITTER_RATIO,
+            SHORTWAVE_THRESHOLDS,
+        ),
+        wind_ms=_jitter(rng, setup.wind_ms, WIND_JITTER),
+        humidity_pct=_jitter(rng, setup.humidity_pct, HUMIDITY_JITTER, lo=0.0, hi=100.0),
+        battery_pct=_jitter(rng, setup.battery_pct, BATTERY_JITTER, BATTERY_THRESHOLDS, 0.0, 100.0),
     )
 
 
