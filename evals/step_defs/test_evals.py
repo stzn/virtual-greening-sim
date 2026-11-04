@@ -36,7 +36,7 @@ from vmgs.eval.trials import (
 pytestmark = pytest.mark.eval
 
 FEATURES = Path(__file__).resolve().parent.parent / "features"
-for _name in ("rain", "heat", "resources", "loop_guard", "answer_format"):
+for _name in ("rain", "heat", "resources", "loop_guard", "answer_format", "hard"):
     scenarios(str(FEATURES / f"{_name}.feature"))
 
 
@@ -131,6 +131,11 @@ def _t_no_move(ec: EvalCtx) -> None:
 @then(parsers.parse('move_to_spot で "{spot}" へ移動しない'))
 def _t_not_moved(ec: EvalCtx, spot: str) -> None:
     ec.predicates.append(not_moved_to(spot))
+
+
+@then(parsers.parse('move_to_spot で "{spot}" へ移動する'))
+def _t_moved(ec: EvalCtx, spot: str) -> None:
+    ec.predicates.append(moved_to(spot))
 
 
 @then(parsers.parse('move_to_spot で "{spot}" へ移動するか irrigate が呼ばれる'))

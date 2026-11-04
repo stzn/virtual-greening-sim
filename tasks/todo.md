@@ -73,3 +73,6 @@
 - [x] Sonnet 5.5（思考あり、3構成×5バリアント、stress12）で比較。plan_early 系は全5件で baseline を上回り、退避は0〜2時。plan_early_move と plan_early の差は +1.3 で区別できない。費用 $10.58。思考オフは API が拒否するため不可。docs/eval-results.md 2026-11-04 追記。
 - [x] Sonnet 5.5（思考あり）で3構成×5を比較（stress12）、判断理由の全文を確認、まとめと Artifact を更新。思考オフは API が拒否するため不可。
 - [ ] 一文を OpenAI 系で試す（API キーの設定が要る）
+
+- [x] 評価を難しくする: evals/features/hard.feature に9シナリオを追加（qwen3 で6件合格・4件未達。docs/eval-results.md 2026-11-05）
+- [ ] 未達4件（雨3時間以内、降水量1mm、日影B、33℃ちょうど）を Haiku / Sonnet でも測る
