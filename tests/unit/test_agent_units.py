@@ -111,3 +111,39 @@ def test_プロンプトv9は最終回答のJSONを必須にし_メモのあと�
     assert "必ず1つ" in PROMPTS["v9"]
     assert "必ず1つ" not in PROMPTS["v8"]
     assert "次のJSONだけを返す" not in PROMPTS["v9"]
+
+
+def test_プロンプトv10は雨の条件を1時間でも_降水量だけでも該当すると書く() -> None:
+    from vmgs.agent.prompts import PROMPTS
+
+    v10 = PROMPTS["v10"]
+    assert "どれか1時間でも" in v10
+    assert "降水量だけで該当" in v10
+    assert "どれか1時間でも" not in PROMPTS["v9"]
+
+
+def test_プロンプトv10は移動の条件を場所と暑さと水分に分けて含む含まないを書く() -> None:
+    from vmgs.agent.prompts import PROMPTS
+
+    v10 = PROMPTS["v10"]
+    assert "B にいるなら当てはまらない" in v10
+    assert "33 ちょうどを含む" in v10
+    assert "日射が 700 以上なら当てはまる" in v10
+    assert "40% 以上なら当てはまらない" in v10
+
+
+def test_プロンプトv10はバッテリー不足でも雨なら散水しないと書く() -> None:
+    from vmgs.agent.prompts import PROMPTS
+
+    assert "散水もしない" in PROMPTS["v10"]
+    assert "散水もしない" not in PROMPTS["v9"]
+
+
+def test_プロンプトv10はv9の最終回答の形式と例を引き継ぎ_既定はv9のまま() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    assert PROMPTS["v10"] != PROMPTS["v9"]
+    assert "例（何もしない場合の最終回答）" in PROMPTS["v10"]
+    assert "## 最終回答の形式" in PROMPTS["v10"]
+    assert PROMPT_VERSION == "v9"
+    assert SYSTEM_PROMPT == PROMPTS["v9"]
