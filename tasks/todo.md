@@ -77,3 +77,4 @@
 - [x] 評価を難しくする: evals/features/hard.feature に9シナリオを追加（qwen3 で6件合格・4件未達。docs/eval-results.md 2026-11-05）
 - [ ] 未達4件（雨3時間以内、降水量1mm、日影B、33℃ちょうど）を Haiku / Sonnet でも測る
 - [x] 競合シナリオ6件（evals/features/conflict.feature）を追加。Haiku 全件5/5、qwen3 は3件が0/5
+- [x] プロンプト v10 を qwen3 で評価: 28件中9件未達（v9 は7件）で全体は悪化。既定は v9 のまま（docs/eval-results.md 2026-11-05）
