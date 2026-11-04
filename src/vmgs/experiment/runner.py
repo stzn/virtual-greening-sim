@@ -107,6 +107,7 @@ class ExperimentSpec:
     agent_infos: dict[str, dict[str, str]] = field(default_factory=dict)
     # 計画観測（残り時間あたりの水・電池）を get_plant_state に返す構成。他の構成の世界は変わらない
     planning_configs: set[str] = field(default_factory=set)
+    condition_configs: set[str] = field(default_factory=set)
     # 残量を超える散水の切り詰め。False にすると、全構成の世界で切り詰めをやめる（過去の比較との互換用）
     truncate_irrigation: bool = True
 
@@ -160,6 +161,7 @@ def _sim_config(spec: ExperimentSpec, index: int, cfg: str) -> SimConfig:
         initial_tank_ml=v.tank_ml,
         initial_battery_pct=v.battery_pct,
         planning_observations=cfg in spec.planning_configs,
+        condition_observations=cfg in spec.condition_configs,
         truncate_irrigation=spec.truncate_irrigation,
     )
 
@@ -377,6 +379,7 @@ def run_suite(
     max_runs: int | None = None,
     agent_infos: dict[str, dict[str, str]] | None = None,
     planning_configs: set[str] | None = None,
+    condition_configs: set[str] | None = None,
     truncate_irrigation: bool = True,
     clock: WallClock = time.perf_counter,
 ) -> SuiteResult:
@@ -420,6 +423,7 @@ def run_suite(
             base=cond.base,
             agent_infos=agent_infos or {},
             planning_configs=planning_configs or set(),
+            condition_configs=condition_configs or set(),
             truncate_irrigation=truncate_irrigation,
         )
         res = run_experiment(

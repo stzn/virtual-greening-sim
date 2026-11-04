@@ -119,3 +119,22 @@ def test_CLI_promptで指定したバージョンのシステムプロンプト�
     )
     assert model.inputs[0][0].content == PROMPTS["v8"]
     assert PROMPTS["v8"] != PROMPTS["v9"]
+
+
+def test_条件観測を有効にした実行だけget_plant_stateに条件の判定が含まれる(tmp_path: Path) -> None:
+    weather = SeriesWeather(load_records(DATA / "heatwave.json"))
+    keys = ("rain_within_3h", "heat_trigger", "moisture_band", "battery_below_15")
+    for flag in (True, False):
+        cfg = SimConfig(scenario="heatwave", hours=2, condition_observations=flag)
+        res = run_simulation(cfg, weather, BaselineAgent, tmp_path / str(flag), "r")
+        results = [c.result for s in res.steps for c in s.tool_calls if c.name == "get_plant_state"]
+        assert results
+        assert all(all(k in r for k in keys) is flag for r in results)
+
+
+def test_実験の構成ごとの条件観測がSimConfigに反映される() -> None:
+    from vmgs.experiment.runner import ExperimentSpec, _sim_config
+
+    spec = ExperimentSpec(name="e", scenario="heatwave", configs={}, condition_configs={"with"})
+    assert _sim_config(spec, 0, "with").condition_observations is True
+    assert _sim_config(spec, 0, "without").condition_observations is False

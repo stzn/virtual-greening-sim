@@ -19,6 +19,20 @@ from vmgs.world.plant import (
 )
 from vmgs.world.spots import SPOTS, Spot, move_cost_pct
 
+# 条件観測の閾値（チェックリストの条件と同じ値。評価の揺らぎ vmgs/eval/trials.py の閾値とも対応する）
+RAIN_LOOKAHEAD_HOURS = 3
+RAIN_PROB_PCT = 60.0
+RAIN_MM = 1.0
+HEAT_TEMP_C = 33.0
+HEAT_SHORTWAVE_W_M2 = 700.0
+BATTERY_LOW_PCT = 15.0
+# 土壌水分の帯。70 ちょうどは "50-70" で、">70" は 70 を超えたとき。それ以外は下限を含む
+MOISTURE_HIGH_ABOVE = 70.0
+MOISTURE_BAND_HIGH = ">70"
+# (下限, 名前) を下限の大きい順に並べる
+MOISTURE_BANDS = ((50.0, "50-70"), (40.0, "40-50"), (30.0, "30-40"))
+MOISTURE_BAND_LOWEST = "<30"
+
 
 class WorldError(Exception):
     """世界のルール違反。ツール層が構造化エラーに変換する。"""
@@ -81,6 +95,7 @@ class World:
         start_spot: str = "A",
         horizon_end: datetime | None = None,
         planning_observations: bool = False,
+        condition_observations: bool = False,
     ) -> None:
         self.weather = weather
         self.clock = clock
@@ -89,6 +104,8 @@ class World:
         # 計画観測: シミュレーションの終了時刻までの残りから、水・電池の「1時間あたりに使える量」を返す
         self.horizon_end = horizon_end
         self.planning_observations_enabled = planning_observations
+        # 条件観測: チェックリストの条件の真偽（事実のみ。行動は含まない）を返す
+        self.condition_observations_enabled = condition_observations
         self.plant = PlantUnit(
             spot_id=start_spot,
             moisture=self.params.initial_moisture,
@@ -158,6 +175,35 @@ class World:
             "hours_remaining": remaining,
             "water_per_remaining_hour_ml": round(p.water_tank_ml / remaining, 1),
             "battery_per_remaining_hour_pct": round(p.battery_pct / remaining, 1),
+        }
+
+    def condition_observations(self) -> dict[str, bool | str] | None:
+        """条件観測（現在値と予報から計算した事実の真偽のみ）。無効なら None。
+
+        moisture_band の境界は下限を含む（30 ちょうどは "30-40"）。70 ちょうどは "50-70"、">70" は 70 超。
+        降水確率が不明（None）の時間は、確率の条件を満たさないものとして扱う。
+        """
+        if not self.condition_observations_enabled:
+            return None
+        now = self.clock.now
+        rain = any(
+            (f.precipitation_prob_pct or 0.0) >= RAIN_PROB_PCT or f.precipitation_mm >= RAIN_MM
+            for f in self.weather.forecast(now, RAIN_LOOKAHEAD_HOURS)
+        )
+        w = self.current_weather()
+        moisture = self.plant.moisture
+        if moisture > MOISTURE_HIGH_ABOVE:
+            band = MOISTURE_BAND_HIGH
+        else:
+            band = next(
+                (name for low, name in MOISTURE_BANDS if moisture >= low), MOISTURE_BAND_LOWEST
+            )
+        return {
+            "rain_within_3h": rain,
+            "heat_trigger": w.temperature_c >= HEAT_TEMP_C
+            or w.shortwave_w_m2 >= HEAT_SHORTWAVE_W_M2,
+            "moisture_band": band,
+            "battery_below_15": self.plant.battery_pct < BATTERY_LOW_PCT,
         }
 
     # --- 時間経過 ---

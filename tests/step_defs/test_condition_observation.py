@@ -47,7 +47,7 @@ def _g_forecast(ctx: Ctx, datatable: list[list[str]]) -> None:
     base = floor_hour(ctx.world.clock.now)
     over = {int(r[0]): (float(r[1]), float(r[2])) for r in rows}
     records = []
-    for h in range(0, 7):
+    for h in range(7):
         prob, mm = over.get(h, (0.0, 0.0))
         records.append(
             WeatherRecord(

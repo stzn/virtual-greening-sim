@@ -170,6 +170,9 @@ class ToolBox:
         planning = self.world.planning_observations()
         if planning is not None:
             out.update(planning)
+        conditions = self.world.condition_observations()
+        if conditions is not None:
+            out.update(conditions)
         return out
 
     def _move_to_spot(self, a: MoveToSpotArgs) -> dict[str, Any]:

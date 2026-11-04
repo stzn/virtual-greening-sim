@@ -12,7 +12,13 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from vmgs.agent.baseline import BaselineAgent, NoopAgent
 from vmgs.agent.fake import ScriptedChatModel, tool_call_message
 from vmgs.agent.llm import MissingApiKeyError, make_chat_model
-from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS, PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+from vmgs.agent.prompts import (
+    PROMPT_REQUIRES_COND_OBS,
+    PROMPT_REQUIRES_PLAN_OBS,
+    PROMPT_VERSION,
+    PROMPTS,
+    SYSTEM_PROMPT,
+)
 from vmgs.agent.protocol import AgentFactory, TurnAgent
 from vmgs.agent.runner import AgentRunner
 from vmgs.config import Settings
@@ -240,6 +246,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             config = _build_config(args)
             if args.prompt in PROMPT_REQUIRES_PLAN_OBS:
                 config = config.model_copy(update={"planning_observations": True})
+            if args.prompt in PROMPT_REQUIRES_COND_OBS:
+                config = config.model_copy(update={"condition_observations": True})
             weather = _load_weather(config.scenario)
             if weather is None:
                 return 2
@@ -366,6 +374,7 @@ def cmd_experiment(args: argparse.Namespace) -> int:
         base=base,
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
+        condition_configs={n for n, sp in specs.items() if sp.condition_observations},
         truncate_irrigation=not args.no_truncate,
     )
     result = run_experiment(exp_spec, weather, RUNS_DIR, max_runs=args.max_runs)
@@ -418,6 +427,7 @@ def _cmd_suite(args: argparse.Namespace) -> int:
         max_runs=args.max_runs,
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
+        condition_configs={n for n, sp in specs.items() if sp.condition_observations},
         truncate_irrigation=not args.no_truncate,
     )
     print(result.summary_md)

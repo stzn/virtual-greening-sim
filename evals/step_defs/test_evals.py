@@ -11,7 +11,7 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, TurnSummary
+from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS, TurnSummary
 from vmgs.agent.runner import TurnResult
 from vmgs.eval.trials import (
     DEFAULT_TRIALS,
@@ -109,7 +109,13 @@ def _g_history(ec: EvalCtx, datatable: list[list[str]]) -> None:
 @when("エージェントに1ターン判断させる")
 def _w_run(ec: EvalCtx, eval_model: BaseChatModel) -> None:
     version = os.environ.get("EVAL_PROMPT", PROMPT_VERSION)
-    ec.results = run_trials(eval_model, ec.setup, DEFAULT_TRIALS, PROMPTS[version])
+    ec.results = run_trials(
+        eval_model,
+        ec.setup,
+        DEFAULT_TRIALS,
+        PROMPTS[version],
+        condition_observations=version in PROMPT_REQUIRES_COND_OBS,
+    )
 
 
 # ---------------- Then（述語を登録し、最後の「N回中M回」でまとめて判定） ----------------

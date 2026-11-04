@@ -147,3 +147,38 @@ def test_プロンプトv10はv9の最終回答の形式と例を引き継ぎ_�
     assert "## 最終回答の形式" in PROMPTS["v10"]
     assert PROMPT_VERSION == "v9"
     assert SYSTEM_PROMPT == PROMPTS["v9"]
+
+
+def test_プロンプトv11は条件の判定キーを説明し_条件欄がそのキーを指す() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    v11 = PROMPTS["v11"]
+    for key in ("rain_within_3h", "heat_trigger", "moisture_band", "battery_below_15"):
+        assert key in v11
+        assert key not in PROMPTS["v9"]
+    assert "| 1 | `rain_within_3h` が true |" in v11
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11"})
+    assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
+
+
+def test_プロンプトv11は判定を行動の指示でなく事実だと明記しv9の最終回答の形式を引き継ぐ() -> None:
+    from vmgs.agent.prompts import PROMPTS
+
+    v11 = PROMPTS["v11"]
+    assert "事実の判定で、行動の指示ではない" in v11
+    assert "## 最終回答の形式" in v11 and "例（何もしない場合の最終回答）" in v11
+
+
+def test_構成の条件観測はv11のllmだけ有効() -> None:
+    from vmgs.experiment.configs import parse_config_spec
+
+    assert parse_config_spec("llm:ollama:qwen3:14b:v11").condition_observations is True
+    assert parse_config_spec("llm:ollama:qwen3:14b:v9").condition_observations is False
+    assert parse_config_spec("baseline").condition_observations is False
+    assert parse_config_spec("llm:ollama:qwen3:14b:v11+think").condition_observations is True
+
+
+def test_SimConfigの条件観測は既定でオフ() -> None:
+    from vmgs.sim.simulate import SimConfig
+
+    assert SimConfig(scenario="normal").condition_observations is False

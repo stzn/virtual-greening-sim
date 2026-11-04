@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 
-from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS
+from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_REQUIRES_PLAN_OBS
 
 PROVIDERS = {"openai", "anthropic", "ollama"}
 _PROMPT = re.compile(
@@ -27,6 +27,11 @@ class ConfigSpec:
     def planning_observations(self) -> bool:
         """このプロンプトは世界側の計画観測を要する（plan を選んだ構成にだけ有効にする）。"""
         return self.kind == "llm" and self.prompt in PROMPT_REQUIRES_PLAN_OBS
+
+    @property
+    def condition_observations(self) -> bool:
+        """このプロンプトは世界側の条件観測を要する（v11 を選んだ構成にだけ有効にする）。"""
+        return self.kind == "llm" and self.prompt in PROMPT_REQUIRES_COND_OBS
 
     @property
     def name(self) -> str:

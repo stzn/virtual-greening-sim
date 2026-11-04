@@ -225,6 +225,55 @@ SYSTEM_PROMPT_V10 = (
 )
 
 
+# v11: v10（条件欄の文言を長くする）は qwen3 で悪化した（未達 7→9 件）。文章側の対策は限界と判断し、
+# 構造側で「条件の真偽」を get_plant_state に事実として返す（世界側の condition_observations。行動は含まない）。
+# 条件欄はキーを指すだけの短い形にする。#4 は気温だけの条件なので現在値のまま（heat_trigger は日射も含むため）。
+_V11_SECTION_OLD = "## 判断チェックリスト"
+_V11_ROW_OLD = {
+    1: "| 1 | 今後3時間以内に、降水確率 60% 以上 または 降水量 1mm 以上の時間がある |",
+    2: (
+        "| 2 | 日向（A か C）で、気温 33℃ 以上 または 日射 700W/m² 以上、かつ 土壌水分 40% 未満、"
+        "かつ バッテリー 15% 以上、かつ **move_budget_remaining が 1 以上** |"
+    ),
+    3: "| 3 | 土壌水分 30% 未満、かつ #1 に当てはまらない、かつ 水タンク残量が 50ml 以上 |",
+    4: "| 4 | C にいて、気温 33℃ 以上、土壌水分 50〜70%、水タンク 4000ml 以上、#1 に当てはまらない |",
+    5: "| 5 | 土壌水分 30〜70%、かつ 健康度 70 以上 |",
+    6: "| 6 | 土壌水分 70% 超 |",
+}
+_V11_ROW_NEW = {
+    1: "| 1 | `rain_within_3h` が true |",
+    2: (
+        '| 2 | 日向（A か C）で、`heat_trigger` が true、かつ `moisture_band` が "<30" か "30-40"、'
+        "かつ `battery_below_15` が false、かつ **move_budget_remaining が 1 以上** |"
+    ),
+    3: '| 3 | `moisture_band` が "<30"、かつ #1 に当てはまらない、かつ 水タンク残量が 50ml 以上 |',
+    4: (
+        '| 4 | C にいて、気温 33℃ 以上、`moisture_band` が "50-70"、'
+        "水タンク 4000ml 以上、#1 に当てはまらない |"
+    ),
+    5: '| 5 | `moisture_band` が "30-40"・"40-50"・"50-70" のどれか、かつ 健康度 70 以上 |',
+    6: '| 6 | `moisture_band` が ">70" |',
+}
+_V11_SECTION_NEW = (
+    "## get_plant_state が返す条件の判定（事実）\n"
+    "get_plant_state の結果には、チェックリストの条件を判定済みの値が含まれる。自分で数値を比べ直さず、この値を使う。\n"
+    "- `rain_within_3h`: 今後3時間の予報のどれかで、降水確率 60% 以上 または 降水量 1mm 以上なら true\n"
+    "- `heat_trigger`: 現在の気温 33℃ 以上 または 日射 700W/m² 以上なら true\n"
+    '- `moisture_band`: 土壌水分の帯。"<30" / "30-40" / "40-50" / "50-70" / ">70"（30 ちょうどは "30-40"、70 ちょうどは "50-70"）\n'
+    "- `battery_below_15`: バッテリーが 15% 未満なら true\n"
+    "これらは事実の判定で、行動の指示ではない。どの行に当てはまるかは、下のチェックリストで自分で決める。\n\n"
+    "## 判断チェックリスト"
+)
+assert SYSTEM_PROMPT_V9.count(_V11_SECTION_OLD) == 1
+for _n, _old in _V11_ROW_OLD.items():
+    assert _old in SYSTEM_PROMPT_V9, _n
+SYSTEM_PROMPT_V11 = SYSTEM_PROMPT_V9.replace(_V11_SECTION_OLD, _V11_SECTION_NEW)
+for _n, _old in _V11_ROW_OLD.items():
+    SYSTEM_PROMPT_V11 = SYSTEM_PROMPT_V11.replace(_old, _V11_ROW_NEW[_n])
+# 条件観測が必要な版（世界側で condition_observations を有効にする）
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11"})
+
+
 def build_free_prompt(params: Params | None = None) -> str:
     """チェックリストなしのプロンプト。世界のしくみ（事実）・ツール・最終回答の形式だけを伝える。
 
@@ -366,6 +415,7 @@ PROMPTS: dict[str, str] = {
     "v8": SYSTEM_PROMPT_V8,
     "v9": SYSTEM_PROMPT_V9,
     "v10": SYSTEM_PROMPT_V10,
+    "v11": SYSTEM_PROMPT_V11,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

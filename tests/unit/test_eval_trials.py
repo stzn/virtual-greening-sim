@@ -173,14 +173,34 @@ def test_run_trials_は試行ごとに揺らした条件で世界を作る(monke
     seen: list[float] = []
     real = build_world
 
-    def spy(setup: TrialSetup):  # type: ignore[no-untyped-def]
+    def spy(setup: TrialSetup, condition_observations: bool = False):  # type: ignore[no-untyped-def]
         seen.append(setup.battery_pct)
-        return real(setup)
+        return real(setup, condition_observations)
 
     monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
     model = ScriptedChatModel(responses=[AIMessage(content="維持")])  # 最後の応答を繰り返す
     run_trials(model, TrialSetup(battery_pct=70), n=4)
     assert seen[0] == 70 and len(set(seen)) > 1
+
+
+def test_build_world_は条件観測を既定で無効にし_指定で有効にする() -> None:
+    assert build_world(TrialSetup()).condition_observations_enabled is False
+    assert build_world(TrialSetup(), True).condition_observations_enabled is True
+
+
+def test_run_trials_は条件観測の指定を世界へ渡す(monkeypatch: pytest.MonkeyPatch) -> None:
+    flags: list[bool] = []
+    real = build_world
+
+    def spy(setup: TrialSetup, condition_observations: bool = False):  # type: ignore[no-untyped-def]
+        flags.append(condition_observations)
+        return real(setup, condition_observations)
+
+    monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
+    model = ScriptedChatModel(responses=[AIMessage(content="維持")])
+    run_trials(model, TrialSetup(), n=2)
+    run_trials(model, TrialSetup(), n=2, condition_observations=True)
+    assert flags == [False, False, True, True]
 
 
 def test_揺らぎは湿度と水分と風速を範囲内に収める() -> None:
