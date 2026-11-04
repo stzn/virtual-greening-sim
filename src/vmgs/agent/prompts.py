@@ -190,6 +190,41 @@ SYSTEM_PROMPT_V9 = SYSTEM_PROMPT_V8.replace(
 )
 
 
+# v10: 新しい評価（hard / conflict）で qwen3:14b が条件の組み合わせ・境界・OR条件を読み違えた（Haiku は全件 5/5）。
+# 失敗: 雨＋バッテリー不足で散水(0/5)、水分60%の猛暑で移動(0/5)、気温が低く日射だけ強い日に退避しない(0/5)、
+# 確率65%・降水量1.5mmの弱い雨を無視(0/5)、すでにBなのに移動(2/5)、気温ちょうど33℃で動かない(3/5)。
+# このモデルは文章より条件欄に従う（v8）ので、#1 と #2 の条件欄を、含む・含まないまで書き下す。
+_V10_ROW1_OLD = "| 1 | 今後3時間以内に、降水確率 60% 以上 または 降水量 1mm 以上の時間がある |"
+_V10_ROW2_OLD = (
+    "| 2 | 日向（A か C）で、気温 33℃ 以上 または 日射 700W/m² 以上、かつ 土壌水分 40% 未満、"
+    "かつ バッテリー 15% 以上、かつ **move_budget_remaining が 1 以上** |"
+)
+_V10_RULE_OLD = "- バッテリーが 15% 未満のときは move_to_spot を呼ばない。"
+assert _V10_ROW1_OLD in SYSTEM_PROMPT_V9
+assert _V10_ROW2_OLD in SYSTEM_PROMPT_V9
+assert _V10_RULE_OLD in SYSTEM_PROMPT_V9
+SYSTEM_PROMPT_V10 = (
+    SYSTEM_PROMPT_V9.replace(
+        _V10_ROW1_OLD,
+        "| 1 | 今後3時間以内の予報の**どれか1時間でも**、降水確率が 60% 以上 または 降水量が 1mm 以上"
+        "（確率が低くても降水量だけで該当）。バッテリー不足や移動できない場合も、この行が優先 |",
+    )
+    .replace(
+        _V10_ROW2_OLD,
+        "| 2 | 次の4つをすべて満たす: (a) 日向（A か C）にいる。**B にいるなら当てはまらない**"
+        "／(b) 気温が 33℃ 以上（33 ちょうどを含む）**または**日射が 700W/m² 以上。"
+        "**気温が低くても日射が 700W/m² 以上なら当てはまる**"
+        "／(c) 土壌水分が 40% 未満。**40% 以上なら当てはまらない**"
+        "／(d) バッテリー 15% 以上、かつ **move_budget_remaining が 1 以上** |",
+    )
+    .replace(
+        _V10_RULE_OLD,
+        "- バッテリーが 15% 未満のときは move_to_spot を呼ばない。"
+        "移動できなくても、#1 に当てはまるなら散水もしない。",
+    )
+)
+
+
 def build_free_prompt(params: Params | None = None) -> str:
     """チェックリストなしのプロンプト。世界のしくみ（事実）・ツール・最終回答の形式だけを伝える。
 
@@ -330,6 +365,7 @@ PROMPTS: dict[str, str] = {
     "v7": SYSTEM_PROMPT_V7,
     "v8": SYSTEM_PROMPT_V8,
     "v9": SYSTEM_PROMPT_V9,
+    "v10": SYSTEM_PROMPT_V10,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

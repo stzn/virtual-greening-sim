@@ -128,7 +128,7 @@ def test_プロンプトv10は移動の条件を場所と暑さと水分に分�
     v10 = PROMPTS["v10"]
     assert "B にいるなら当てはまらない" in v10
     assert "33 ちょうどを含む" in v10
-    assert "日射が 700 以上なら当てはまる" in v10
+    assert "日射が 700W/m² 以上なら当てはまる" in v10
     assert "40% 以上なら当てはまらない" in v10
 
 
