@@ -80,4 +80,5 @@
 - [x] プロンプト v10 を qwen3 で評価: 28件中9件未達（v9 は7件）で全体は悪化。既定は v9 のまま（docs/eval-results.md 2026-11-05）
 - [x] 条件観測 + v11 を qwen3 で評価: 未達 7→4（docs/eval-results.md）。水分30ちょうどが 4→0 に悪化
 - [x] v11 の Haiku 評価: 全28件合格（クレジット補充後に再実行。退行なし）
+- [x] v12（水分を真偽値に分解）を qwen3 で評価: 未達 4→2（docs/eval-results.md）。#2 の移動に関わる2件が悪化
 - [ ] v11 の 24 時間通し運用（stress scarce_water、qwen3、v9 と各 5 バリアント）で持ち越しを確認
