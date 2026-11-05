@@ -196,8 +196,10 @@ def test_プロンプトv14は行3の数値条件をキーで指し_他の行は
     assert "4000ml 以上" not in row3 and "50〜70%" not in row3
     # 他の行（#1・#2・#4・#5）は v13 と同じ
     for n in (1, 2, 4, 5):
-        pick = lambda p, n=n: next(r for r in p.splitlines() if r.startswith(f"| {n} |"))  # noqa: E731
-        assert pick(v14) == pick(v13)
+        prefix = f"| {n} |"
+        assert [r for r in v14.splitlines() if r.startswith(prefix)] == [
+            r for r in v13.splitlines() if r.startswith(prefix)
+        ]
     assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 

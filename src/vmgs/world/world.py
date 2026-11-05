@@ -37,6 +37,9 @@ MOISTURE_BELOW_LOW = 30.0
 MOISTURE_BELOW_MID = 40.0
 # 日向のスポット（A・C）は日射係数 1.0。B（0.2）は日影
 SUN_SOLAR_FACTOR = 1.0
+# C の暑熱緩和の条件（水分は両端を含む 50〜70、タンクは 4000ml 以上）
+MOISTURE_HEAT_RELIEF = (50.0, 70.0)
+TANK_HEAT_RELIEF_ML = 4000
 
 
 class WorldError(Exception):
@@ -213,6 +216,9 @@ class World:
             "moisture_above_70": moisture > MOISTURE_HIGH_ABOVE,
             "battery_below_15": self.plant.battery_pct < BATTERY_LOW_PCT,
             "in_sunlight": self.spot.solar_factor >= SUN_SOLAR_FACTOR,
+            "temp_at_least_33": w.temperature_c >= HEAT_TEMP_C,
+            "moisture_50_to_70": MOISTURE_HEAT_RELIEF[0] <= moisture <= MOISTURE_HEAT_RELIEF[1],
+            "tank_at_least_4000": self.plant.water_tank_ml >= TANK_HEAT_RELIEF_ML,
         }
 
     # --- 時間経過 ---

@@ -357,8 +357,35 @@ SYSTEM_PROMPT_V13 = SYSTEM_PROMPT_V12
 for _old13, _new13 in _V13_REPLACEMENTS:
     assert _old13 in SYSTEM_PROMPT_V13, _old13
     SYSTEM_PROMPT_V13 = SYSTEM_PROMPT_V13.replace(_old13, _new13)
+
+
+# v14: v13 で残った1件（C の暑熱緩和・タンク 3000ml）は、判断メモで「水タンク 3000ml 以上 → 該当」と、
+# 条件の 4000 を観測値に置き換えて読んでいた。キーにしていない文章の数値条件は読み替えられる。
+# 行 #3 の数値条件（気温 33・水分 50〜70・タンク 4000）を事実のキーにする。他の行は v13 のまま。
+_V14_REPLACEMENTS = (
+    (
+        "- `in_sunlight`: 今いるスポットが日向（A か C）なら true（B は false）\n",
+        (
+            "- `in_sunlight`: 今いるスポットが日向（A か C）なら true（B は false）\n"
+            "- `temp_at_least_33`: 現在の気温が 33℃ 以上なら true（日射は関係しない）\n"
+            "- `moisture_50_to_70`: 土壌水分が 50% 以上 70% 以下なら true\n"
+            "- `tank_at_least_4000`: 水タンク残量が 4000ml 以上なら true\n"
+        ),
+    ),
+    (
+        "| 3 | C にいて、気温 33℃ 以上、土壌水分 50〜70%、水タンク 4000ml 以上、`rain_within_3h` が false |",
+        (
+            "| 3 | C にいて、`temp_at_least_33` が true、`moisture_50_to_70` が true、"
+            "`tank_at_least_4000` が true、`rain_within_3h` が false |"
+        ),
+    ),
+)
+SYSTEM_PROMPT_V14 = SYSTEM_PROMPT_V13
+for _old14, _new14 in _V14_REPLACEMENTS:
+    assert _old14 in SYSTEM_PROMPT_V14, _old14
+    SYSTEM_PROMPT_V14 = SYSTEM_PROMPT_V14.replace(_old14, _new14)
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14"})
 
 
 def build_free_prompt(params: Params | None = None) -> str:
@@ -505,6 +532,7 @@ PROMPTS: dict[str, str] = {
     "v11": SYSTEM_PROMPT_V11,
     "v12": SYSTEM_PROMPT_V12,
     "v13": SYSTEM_PROMPT_V13,
+    "v14": SYSTEM_PROMPT_V14,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
