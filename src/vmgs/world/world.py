@@ -35,6 +35,8 @@ MOISTURE_BAND_LOWEST = "<30"
 # 真偽値で返す水分の閾値（below は未満、above は超。ちょうどは含まない）
 MOISTURE_BELOW_LOW = 30.0
 MOISTURE_BELOW_MID = 40.0
+# 日向のスポット（A・C）は日射係数 1.0。B（0.2）は日影
+SUN_SOLAR_FACTOR = 1.0
 
 
 class WorldError(Exception):
@@ -210,6 +212,7 @@ class World:
             "moisture_below_40": moisture < MOISTURE_BELOW_MID,
             "moisture_above_70": moisture > MOISTURE_HIGH_ABOVE,
             "battery_below_15": self.plant.battery_pct < BATTERY_LOW_PCT,
+            "in_sunlight": self.spot.solar_factor >= SUN_SOLAR_FACTOR,
         }
 
     # --- 時間経過 ---

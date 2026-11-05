@@ -300,8 +300,59 @@ SYSTEM_PROMPT_V12 = SYSTEM_PROMPT_V11
 for _old12, _new12 in _V12_REPLACEMENTS:
     assert _old12 in SYSTEM_PROMPT_V12, _old12
     SYSTEM_PROMPT_V12 = SYSTEM_PROMPT_V12.replace(_old12, _new12)
+
+
+# v13: v12 の悪化2件は判断メモから原因が分かった。(a) 雨+猛暑・乾燥は、表の #1 で止まり #2（Bへ退避）を評価しない
+# （「最初に当てはまる行で止まる」表なのに #1 だけ「止まらない」例外を持つ）。(b) すでに B では、#2 の
+# 「日向（A か C）で」が文章のままのため落ち、B 自身を日陰と認めつつ移動する。
+# 日向を事実のキー in_sunlight にし、雨は表から外して「irrigate を呼ばない」禁止ルールにする（#3・#4 の条件にも入れる）。
+# 行番号は 1〜5 に振り直す（旧 #2〜#6 → 新 #1〜#5）。
+_V13_REPLACEMENTS = (
+    (
+        "- `battery_below_15`: バッテリーが 15% 未満なら true\n",
+        "- `battery_below_15`: バッテリーが 15% 未満なら true\n"
+        "- `in_sunlight`: 今いるスポットが日向（A か C）なら true（B は false）\n",
+    ),
+    (
+        "## 判断チェックリスト（上から順。最初に当てはまる行に従う）\n",
+        "## 散水の禁止ルール（表とは別に常に守る）\n"
+        "- `rain_within_3h` が true の間は irrigate を呼ばない（雨が水を与えるので散水は無駄）。"
+        "移動の判断は、下の表で続ける。\n\n"
+        "## 判断チェックリスト（上から順。最初に当てはまる行に従う）\n",
+    ),
+    (
+        "| 1 | `rain_within_3h` が true | **irrigate を呼ばない**（雨が水を与えるので散水は無駄）。"
+        "#2 以降は散水以外の判断だけ行う |\n",
+        "",
+    ),
+    (
+        "| 2 | 日向（A か C）で、`heat_trigger` が true,".replace(",", "、"),
+        "| 1 | `in_sunlight` が true、かつ `heat_trigger` が true、",
+    ),
+    (
+        "| B へ move_to_spot する（すでに B にいる、または move_budget_remaining が 0 なら移動せず #3 へ） |",
+        "| B へ move_to_spot する |",
+    ),
+    (
+        "| 3 | `moisture_below_30` が true、かつ #1 に当てはまらない、",
+        "| 2 | `moisture_below_30` が true、かつ `rain_within_3h` が false、",
+    ),
+    (
+        "土壌水分 50〜70%、水タンク 4000ml 以上、#1 に当てはまらない |",
+        "土壌水分 50〜70%、水タンク 4000ml 以上、`rain_within_3h` が false |",
+    ),
+    ("| 4 | C にいて", "| 3 | C にいて"),
+    ("| 5 | `moisture_below_30` が false", "| 4 | `moisture_below_30` が false"),
+    ("| 6 | `moisture_above_70` が true |", "| 5 | `moisture_above_70` が true |"),
+    ("#5: 土壌水分55%で適正", "#4: 土壌水分55%で適正"),
+    ("#5 に該当（水分55%", "#4 に該当（水分55%"),
+)
+SYSTEM_PROMPT_V13 = SYSTEM_PROMPT_V12
+for _old13, _new13 in _V13_REPLACEMENTS:
+    assert _old13 in SYSTEM_PROMPT_V13, _old13
+    SYSTEM_PROMPT_V13 = SYSTEM_PROMPT_V13.replace(_old13, _new13)
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13"})
 
 
 def build_free_prompt(params: Params | None = None) -> str:
@@ -447,6 +498,7 @@ PROMPTS: dict[str, str] = {
     "v10": SYSTEM_PROMPT_V10,
     "v11": SYSTEM_PROMPT_V11,
     "v12": SYSTEM_PROMPT_V12,
+    "v13": SYSTEM_PROMPT_V13,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
