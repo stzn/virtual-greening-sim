@@ -157,7 +157,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12"})
     assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
@@ -176,6 +176,31 @@ def test_構成の条件観測はv11のllmだけ有効() -> None:
     assert parse_config_spec("llm:ollama:qwen3:14b:v9").condition_observations is False
     assert parse_config_spec("baseline").condition_observations is False
     assert parse_config_spec("llm:ollama:qwen3:14b:v11+think").condition_observations is True
+    assert parse_config_spec("llm:ollama:qwen3:14b:v12").condition_observations is True
+
+
+def test_プロンプトv12は水分を真偽値のキーで指し_帯を使わない() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    v12 = PROMPTS["v12"]
+    for key in (
+        "rain_within_3h",
+        "heat_trigger",
+        "moisture_below_30",
+        "moisture_below_40",
+        "moisture_above_70",
+        "battery_below_15",
+    ):
+        assert key in v12
+    assert "moisture_band" not in v12
+    assert v12 != PROMPTS["v11"] != PROMPTS["v9"]
+    assert "| 1 | `rain_within_3h` が true |" in v12
+    assert "`moisture_below_40` が true" in v12  # #2
+    assert "| 6 | `moisture_above_70` が true |" in v12
+    assert "土壌水分 50〜70%" in v12  # #4 は現在値のまま
+    assert "事実の判定で、行動の指示ではない" in v12
+    assert "## 最終回答の形式" in v12 and "例（何もしない場合の最終回答）" in v12
+    assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
 def test_SimConfigの条件観測は既定でオフ() -> None:

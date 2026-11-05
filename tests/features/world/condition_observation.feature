@@ -12,7 +12,7 @@
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー は含まれない
 
-  シナリオ: 有効にすると、条件観測のキーが4つ返る
+  シナリオ: 有効にすると、条件観測のキーが7つ返る
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー が含まれる
@@ -25,7 +25,7 @@
   シナリオ: 判断基準（行番号・推奨行動）は含まれない
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
-    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・battery_below_15 の4つだけである
+    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15 の7つだけである
 
   # --- 雨 ---
   シナリオテンプレート: 今後3時間以内の降水確率・降水量で rain_within_3h が決まる
@@ -85,6 +85,26 @@
       | 70    | 50-70 |
       | 70.1  | >70   |
       | 100   | >70   |
+
+  # --- 水分の真偽値（v12。帯の集合照合をやめ、他のキーと同じ真偽値にそろえる） ---
+  シナリオテンプレート: 土壌水分は閾値ごとの真偽値でも返る
+    前提 条件観測が有効である
+    かつ 土壌水分は <水分>% である
+    もし get_plant_state を呼ぶ
+    ならば moisture_below_30 は <30未満> である
+    かつ moisture_below_40 は <40未満> である
+    かつ moisture_above_70 は <70超> である
+
+    例:
+      | 水分  | 30未満 | 40未満 | 70超  |
+      | 0     | true   | true   | false |
+      | 29.9  | true   | true   | false |
+      | 30    | false  | true   | false |
+      | 39.9  | false  | true   | false |
+      | 40    | false  | false  | false |
+      | 70    | false  | false  | false |
+      | 70.1  | false  | false  | true  |
+      | 100   | false  | false  | true  |
 
   # --- バッテリー ---
   シナリオテンプレート: バッテリーが15%未満のときだけ battery_below_15 は true になる

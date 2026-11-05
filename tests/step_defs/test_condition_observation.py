@@ -13,7 +13,15 @@ from vmgs.weather.providers import SeriesWeather, floor_hour
 
 scenarios("world/condition_observation.feature")
 
-OBS_KEYS = ("rain_within_3h", "heat_trigger", "moisture_band", "battery_below_15")
+OBS_KEYS = (
+    "rain_within_3h",
+    "heat_trigger",
+    "moisture_band",
+    "moisture_below_30",
+    "moisture_below_40",
+    "moisture_above_70",
+    "battery_below_15",
+)
 
 
 class CondCtx:
@@ -87,9 +95,10 @@ def _t_same(ctx: Ctx, cc: CondCtx) -> None:
 
 
 @then(
-    "条件観測のキーは rain_within_3h・heat_trigger・moisture_band・battery_below_15 の4つだけである"
+    "条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・"
+    "moisture_below_40・moisture_above_70・battery_below_15 の7つだけである"
 )
-def _t_only_four(ctx: Ctx, cc: CondCtx) -> None:
+def _t_only_seven(ctx: Ctx, cc: CondCtx) -> None:
     ctx.world.condition_observations_enabled = False
     base = ToolBox(ctx.world).call("get_plant_state")
     assert set(cc.result) - set(base) == set(OBS_KEYS)
