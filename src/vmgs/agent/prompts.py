@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from vmgs.world.params import Params
 
-PROMPT_VERSION = "v9"
+PROMPT_VERSION = "v13"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -388,6 +388,11 @@ for _old14, _new14 in _V14_REPLACEMENTS:
 PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14"})
 
 
+def prompt_requires_cond_obs(prompt: str | None) -> bool:
+    """条件観測を要するか。指定なし（None）は既定の版で判断する。"""
+    return (prompt or PROMPT_VERSION) in PROMPT_REQUIRES_COND_OBS
+
+
 def build_free_prompt(params: Params | None = None) -> str:
     """チェックリストなしのプロンプト。世界のしくみ（事実）・ツール・最終回答の形式だけを伝える。
 
@@ -517,7 +522,7 @@ SYSTEM_PROMPT_EARLY = build_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY = build_plan_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY_MOVE = build_plan_early_move_prompt()
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V9
+SYSTEM_PROMPT = SYSTEM_PROMPT_V13
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
