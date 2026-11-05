@@ -310,23 +310,29 @@ for _old12, _new12 in _V12_REPLACEMENTS:
 _V13_REPLACEMENTS = (
     (
         "- `battery_below_15`: バッテリーが 15% 未満なら true\n",
-        "- `battery_below_15`: バッテリーが 15% 未満なら true\n"
-        "- `in_sunlight`: 今いるスポットが日向（A か C）なら true（B は false）\n",
+        (
+            "- `battery_below_15`: バッテリーが 15% 未満なら true\n"
+            "- `in_sunlight`: 今いるスポットが日向（A か C）なら true（B は false）\n"
+        ),
     ),
     (
         "## 判断チェックリスト（上から順。最初に当てはまる行に従う）\n",
-        "## 散水の禁止ルール（表とは別に常に守る）\n"
-        "- `rain_within_3h` が true の間は irrigate を呼ばない（雨が水を与えるので散水は無駄）。"
-        "移動の判断は、下の表で続ける。\n\n"
-        "## 判断チェックリスト（上から順。最初に当てはまる行に従う）\n",
+        (
+            "## 散水の禁止ルール（表とは別に常に守る）\n"
+            "- `rain_within_3h` が true の間は irrigate を呼ばない（雨が水を与えるので散水は無駄）。"
+            "移動の判断は、下の表で続ける。\n\n"
+            "## 判断チェックリスト（上から順。最初に当てはまる行に従う）\n"
+        ),
     ),
     (
-        "| 1 | `rain_within_3h` が true | **irrigate を呼ばない**（雨が水を与えるので散水は無駄）。"
-        "#2 以降は散水以外の判断だけ行う |\n",
+        (
+            "| 1 | `rain_within_3h` が true | **irrigate を呼ばない**（雨が水を与えるので散水は無駄）。"
+            "#2 以降は散水以外の判断だけ行う |\n"
+        ),
         "",
     ),
     (
-        "| 2 | 日向（A か C）で、`heat_trigger` が true,".replace(",", "、"),
+        "| 2 | 日向（A か C）で、`heat_trigger` が true、",
         "| 1 | `in_sunlight` が true、かつ `heat_trigger` が true、",
     ),
     (
