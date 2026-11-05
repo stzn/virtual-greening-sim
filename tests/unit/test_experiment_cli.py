@@ -210,3 +210,9 @@ def test_CLI_promptにfreeを選べる(runs: Path) -> None:
     finally:
         mp.undo()
     assert model.inputs[0][0].content == PROMPTS["free"]
+
+
+def test_プロンプト指定のないllm構成は既定のv13なので条件観測を有効にする() -> None:
+    assert ConfigSpec("llm", "ollama", "qwen3:14b", None).condition_observations is True
+    assert ConfigSpec("llm", "ollama", "qwen3:14b", "v9").condition_observations is False
+    assert ConfigSpec("baseline", None, None, None).condition_observations is False
