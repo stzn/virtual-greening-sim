@@ -12,7 +12,7 @@
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー は含まれない
 
-  シナリオ: 有効にすると、条件観測のキーが7つ返る
+  シナリオ: 有効にすると、条件観測のキーが8つ返る
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー が含まれる
@@ -25,7 +25,7 @@
   シナリオ: 判断基準（行番号・推奨行動）は含まれない
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
-    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15 の7つだけである
+    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight の8つだけである
 
   # --- 雨 ---
   シナリオテンプレート: 今後3時間以内の降水確率・降水量で rain_within_3h が決まる
@@ -105,6 +105,19 @@
       | 70    | false  | false  | false |
       | 70.1  | false  | false  | true  |
       | 100   | false  | false  | true  |
+
+  # --- 日向（v13。「日向（A か C）で」という文章の条件をキーにする） ---
+  シナリオテンプレート: 日射 100% のスポット（A・C）だけ in_sunlight は true になる
+    前提 条件観測が有効である
+    かつ 植物ユニットがスポット "<スポット>" にいる
+    もし get_plant_state を呼ぶ
+    ならば in_sunlight は <結果> である
+
+    例:
+      | スポット | 結果  |
+      | A        | true  |
+      | B        | false |
+      | C        | true  |
 
   # --- バッテリー ---
   シナリオテンプレート: バッテリーが15%未満のときだけ battery_below_15 は true になる

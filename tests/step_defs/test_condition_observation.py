@@ -21,6 +21,7 @@ OBS_KEYS = (
     "moisture_below_40",
     "moisture_above_70",
     "battery_below_15",
+    "in_sunlight",
 )
 
 
@@ -96,7 +97,7 @@ def _t_same(ctx: Ctx, cc: CondCtx) -> None:
 
 @then(
     "条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・"
-    "moisture_below_40・moisture_above_70・battery_below_15 の7つだけである"
+    "moisture_below_40・moisture_above_70・battery_below_15・in_sunlight の8つだけである"
 )
 def _t_only_seven(ctx: Ctx, cc: CondCtx) -> None:
     ctx.world.condition_observations_enabled = False

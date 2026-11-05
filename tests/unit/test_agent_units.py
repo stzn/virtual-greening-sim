@@ -157,7 +157,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13"})
     assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
@@ -177,6 +177,28 @@ def test_構成の条件観測はv11のllmだけ有効() -> None:
     assert parse_config_spec("baseline").condition_observations is False
     assert parse_config_spec("llm:ollama:qwen3:14b:v11+think").condition_observations is True
     assert parse_config_spec("llm:ollama:qwen3:14b:v12").condition_observations is True
+    assert parse_config_spec("llm:ollama:qwen3:14b:v13").condition_observations is True
+
+
+def test_プロンプトv13は雨を表から外した禁止ルールにし_日向をキーで指す() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    v13 = PROMPTS["v13"]
+    assert v13 != PROMPTS["v12"]
+    assert "`in_sunlight`" in v13 and "日向（A か C）で" not in v13
+    # 雨は表の行ではなく、表の前の禁止ルール。移動の判断は続ける
+    assert "| 1 | `rain_within_3h`" not in v13
+    rule, table = v13.split("## 判断チェックリスト")
+    assert "`rain_within_3h` が true の間は irrigate を呼ばない" in rule
+    assert "| 1 | `in_sunlight` が true、かつ `heat_trigger` が true、" in table
+    assert "すでに B にいる" not in table
+    assert table.count("`rain_within_3h` が false") == 2  # 散水する行（旧 #3・#4）
+    assert "| 5 | `moisture_above_70` が true |" in table and "| 6 |" not in table
+    assert "#1 に当てはまらない" not in v13
+    assert "#4: 土壌水分55%" in v13 and "#4 に該当（水分55%・健康度100）" in v13
+    assert "#5 に該当（水分55%" not in v13
+    assert "moisture_band" not in v13
+    assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
 def test_プロンプトv12は水分を真偽値のキーで指し_帯を使わない() -> None:
