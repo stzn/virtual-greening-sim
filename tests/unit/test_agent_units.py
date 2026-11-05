@@ -157,7 +157,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14"})
     assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
@@ -178,6 +178,27 @@ def test_構成の条件観測はv11のllmだけ有効() -> None:
     assert parse_config_spec("llm:ollama:qwen3:14b:v11+think").condition_observations is True
     assert parse_config_spec("llm:ollama:qwen3:14b:v12").condition_observations is True
     assert parse_config_spec("llm:ollama:qwen3:14b:v13").condition_observations is True
+    assert parse_config_spec("llm:ollama:qwen3:14b:v14").condition_observations is True
+
+
+def test_プロンプトv14は行3の数値条件をキーで指し_他の行はv13のまま() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    v13, v14 = PROMPTS["v13"], PROMPTS["v14"]
+    assert v14 != v13
+    for key in ("temp_at_least_33", "moisture_50_to_70", "tank_at_least_4000"):
+        assert key in v14 and key not in v13
+    row3 = next(r for r in v14.splitlines() if r.startswith("| 3 |"))
+    assert row3.startswith(
+        "| 3 | C にいて、`temp_at_least_33` が true、`moisture_50_to_70` が true、"
+        "`tank_at_least_4000` が true、`rain_within_3h` が false |"
+    )
+    assert "4000ml 以上" not in row3 and "50〜70%" not in row3
+    # 他の行（#1・#2・#4・#5）は v13 と同じ
+    for n in (1, 2, 4, 5):
+        pick = lambda p, n=n: next(r for r in p.splitlines() if r.startswith(f"| {n} |"))  # noqa: E731
+        assert pick(v14) == pick(v13)
+    assert PROMPT_VERSION == "v9" and SYSTEM_PROMPT == PROMPTS["v9"]
 
 
 def test_プロンプトv13は雨を表から外した禁止ルールにし_日向をキーで指す() -> None:

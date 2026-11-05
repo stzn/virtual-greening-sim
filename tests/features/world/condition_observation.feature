@@ -12,7 +12,7 @@
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー は含まれない
 
-  シナリオ: 有効にすると、条件観測のキーが8つ返る
+  シナリオ: 有効にすると、条件観測のキーが11個返る
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー が含まれる
@@ -25,7 +25,7 @@
   シナリオ: 判断基準（行番号・推奨行動）は含まれない
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
-    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight の8つだけである
+    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・temp_at_least_33・moisture_50_to_70・tank_at_least_4000 の11個だけである
 
   # --- 雨 ---
   シナリオテンプレート: 今後3時間以内の降水確率・降水量で rain_within_3h が決まる
@@ -118,6 +118,45 @@
       | A        | true  |
       | B        | false |
       | C        | true  |
+
+  # --- Cの暑熱緩和の数値条件（v14。観測値で読み替えられる文章の数値をキーにする） ---
+  シナリオテンプレート: 外気温が33℃以上のときだけ temp_at_least_33 は true になる（日射は関係しない）
+    前提 条件観測が有効である
+    かつ 現在の気象は 気温 <気温>℃・日射 900W/m² である
+    もし get_plant_state を呼ぶ
+    ならば temp_at_least_33 は <結果> である
+
+    例:
+      | 気温 | 結果  |
+      | 32.9 | false |
+      | 33   | true  |
+      | 36   | true  |
+
+  シナリオテンプレート: 土壌水分が50〜70%（両端を含む）のときだけ moisture_50_to_70 は true になる
+    前提 条件観測が有効である
+    かつ 土壌水分は <水分>% である
+    もし get_plant_state を呼ぶ
+    ならば moisture_50_to_70 は <結果> である
+
+    例:
+      | 水分 | 結果  |
+      | 49.9 | false |
+      | 50   | true  |
+      | 60   | true  |
+      | 70   | true  |
+      | 70.1 | false |
+
+  シナリオテンプレート: 水タンク残量が4000ml以上のときだけ tank_at_least_4000 は true になる
+    前提 条件観測が有効である
+    かつ 水タンク残量は <残量>ml である
+    もし get_plant_state を呼ぶ
+    ならば tank_at_least_4000 は <結果> である
+
+    例:
+      | 残量 | 結果  |
+      | 3999 | false |
+      | 4000 | true  |
+      | 8000 | true  |
 
   # --- バッテリー ---
   シナリオテンプレート: バッテリーが15%未満のときだけ battery_below_15 は true になる
