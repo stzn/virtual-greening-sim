@@ -78,3 +78,6 @@
 - [ ] 未達4件（雨3時間以内、降水量1mm、日影B、33℃ちょうど）を Haiku / Sonnet でも測る
 - [x] 競合シナリオ6件（evals/features/conflict.feature）を追加。Haiku 全件5/5、qwen3 は3件が0/5
 - [x] プロンプト v10 を qwen3 で評価: 28件中9件未達（v9 は7件）で全体は悪化。既定は v9 のまま（docs/eval-results.md 2026-11-05）
+- [x] 条件観測 + v11 を qwen3 で評価: 未達 7→4（docs/eval-results.md）。水分30ちょうどが 4→0 に悪化
+- [ ] v11 の Haiku 評価（Anthropic のクレジット補充後に再実行。無効な実行は破棄扱い）
+- [ ] v11 の 24 時間通し運用（stress scarce_water、qwen3、v9 と各 5 バリアント）で持ち越しを確認
