@@ -32,6 +32,9 @@ MOISTURE_BAND_HIGH = ">70"
 # (下限, 名前) を下限の大きい順に並べる
 MOISTURE_BANDS = ((50.0, "50-70"), (40.0, "40-50"), (30.0, "30-40"))
 MOISTURE_BAND_LOWEST = "<30"
+# 真偽値で返す水分の閾値（below は未満、above は超。ちょうどは含まない）
+MOISTURE_BELOW_LOW = 30.0
+MOISTURE_BELOW_MID = 40.0
 
 
 class WorldError(Exception):
@@ -203,6 +206,9 @@ class World:
             "heat_trigger": w.temperature_c >= HEAT_TEMP_C
             or w.shortwave_w_m2 >= HEAT_SHORTWAVE_W_M2,
             "moisture_band": band,
+            "moisture_below_30": moisture < MOISTURE_BELOW_LOW,
+            "moisture_below_40": moisture < MOISTURE_BELOW_MID,
+            "moisture_above_70": moisture > MOISTURE_HIGH_ABOVE,
             "battery_below_15": self.plant.battery_pct < BATTERY_LOW_PCT,
         }
 

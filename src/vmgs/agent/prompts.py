@@ -270,8 +270,38 @@ for _n, _old in _V11_ROW_OLD.items():
 SYSTEM_PROMPT_V11 = SYSTEM_PROMPT_V9.replace(_V11_SECTION_OLD, _V11_SECTION_NEW)
 for _n, _old in _V11_ROW_OLD.items():
     SYSTEM_PROMPT_V11 = SYSTEM_PROMPT_V11.replace(_old, _V11_ROW_NEW[_n])
+
+
+# v12: v11 の qwen3 では水分ちょうど30 が 4→0 に悪化した。moisture_band だけが文字列の集合照合
+# （"<30" か "30-40" など）で、他の真偽値キーと型が揃っておらず、#2 の帯だけを見て heat_trigger を見落とすと推測した。
+# 水分を閾値ごとの真偽値（moisture_below_30 / moisture_below_40 / moisture_above_70）に分け、全行を「キーが true/false」で読めるようにする。
+# #4 の水分 50〜70% は真偽値キーが無いので現在値のままにする。
+_V12_BAND_LINE = (
+    '- `moisture_band`: 土壌水分の帯。"<30" / "30-40" / "40-50" / "50-70" / ">70"'
+    '（30 ちょうどは "30-40"、70 ちょうどは "50-70"）\n'
+)
+_V12_BAND_NEW = (
+    "- `moisture_below_30`: 土壌水分が 30% 未満なら true（30 ちょうどは false）\n"
+    "- `moisture_below_40`: 土壌水分が 40% 未満なら true\n"
+    "- `moisture_above_70`: 土壌水分が 70% 超なら true（70 ちょうどは false）\n"
+)
+_V12_REPLACEMENTS = (
+    (_V12_BAND_LINE, _V12_BAND_NEW),
+    ('かつ `moisture_band` が "<30" か "30-40"、', "かつ `moisture_below_40` が true、"),
+    ('| 3 | `moisture_band` が "<30"、', "| 3 | `moisture_below_30` が true、"),
+    ('`moisture_band` が "50-70"、', "土壌水分 50〜70%、"),
+    (
+        '| 5 | `moisture_band` が "30-40"・"40-50"・"50-70" のどれか、かつ 健康度 70 以上 |',
+        "| 5 | `moisture_below_30` が false、かつ `moisture_above_70` が false、かつ 健康度 70 以上 |",
+    ),
+    ('| 6 | `moisture_band` が ">70" |', "| 6 | `moisture_above_70` が true |"),
+)
+SYSTEM_PROMPT_V12 = SYSTEM_PROMPT_V11
+for _old12, _new12 in _V12_REPLACEMENTS:
+    assert _old12 in SYSTEM_PROMPT_V12, _old12
+    SYSTEM_PROMPT_V12 = SYSTEM_PROMPT_V12.replace(_old12, _new12)
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12"})
 
 
 def build_free_prompt(params: Params | None = None) -> str:
@@ -416,6 +446,7 @@ PROMPTS: dict[str, str] = {
     "v9": SYSTEM_PROMPT_V9,
     "v10": SYSTEM_PROMPT_V10,
     "v11": SYSTEM_PROMPT_V11,
+    "v12": SYSTEM_PROMPT_V12,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
