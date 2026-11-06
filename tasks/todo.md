@@ -86,3 +86,5 @@
 - [x] v13 を Haiku で退行確認: 28/28 合格（docs/eval-results.md）
 - [x] 既定のプロンプトを v13 に変更（条件観測は指定なしでも有効）
 - [x] 24 時間通し運用（scarce_water、qwen3、5バリアント）で v9 と v13 を比較: v13 は5件中4件で上回り負けなし（平均 75.2→81.1）。docs/eval-results.md
+- [x] 残り3状況（dry_before_rain / wet_rain / tradeoff）で v9 と v13 を比較: wet_rain・tradeoff は同じ、**dry_before_rain は v13 が退行（53.4→32.7）**。原因は v13 の雨の散水禁止ルール（推定）。docs/eval-results.md
+- [ ] 既定 v13 の見直し（dry_before_rain の退行をどう扱うか）
