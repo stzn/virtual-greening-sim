@@ -85,4 +85,4 @@
 - [x] v14（行 #3 の数値条件をキーに）を qwen3 で評価: 未達 1→2。タンク4000ml未満は条件を読み違えず無視しており、キー化では直らなかった（docs/eval-results.md）
 - [x] v13 を Haiku で退行確認: 28/28 合格（docs/eval-results.md）
 - [x] 既定のプロンプトを v13 に変更（条件観測は指定なしでも有効）
-- [ ] v11 の 24 時間通し運用（stress scarce_water、qwen3、v9 と各 5 バリアント）で持ち越しを確認
+- [x] 24 時間通し運用（scarce_water、qwen3）で v9 と v13 を比較: v13 が4バリアントすべてで v9 以上（平均 72.6→79.9）。v13 のバリアント4は未完（docs/eval-results.md）
