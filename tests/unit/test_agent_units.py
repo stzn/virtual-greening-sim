@@ -342,3 +342,21 @@ def test_プロンプトv17は水分キーの使う行を説明に添え_他はv
     assert v17.split("## 判断チェックリスト")[1] == v16.split("## 判断チェックリスト")[1]
     # 既定は v17
     assert PROMPT_VERSION == "v17"
+
+
+def test_プロンプトv18は判断メモの手順に_1つでも_なら非該当_を足し_他はv17と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v17, v18 = PROMPTS["v17"], PROMPTS["v18"]
+    assert v18 != v17 and "v18" in PROMPT_REQUIRES_COND_OBS
+    # 手順 4 に、× が 1 つでもあれば非該当にする規則がある
+    step4 = v18.split("4. 判断メモを書く。")[1].split("5. ")[0]
+    assert "× が 1 つでもあればその行は非該当" in step4
+    assert "× を書いた行を「該当」と書いてはならない" in step4
+    # 差分はその規則だけ（それを除くと v17 と同じ）
+    added = "「かつ」で並ぶ条件は、**× が 1 つでもあればその行は非該当**（他が全部 ○ でも該当にしない）。× を書いた行を「該当」と書いてはならない。"
+    assert v18.replace(added, "") == v17
+    # チェックリストとキー一覧は v17 と同じ
+    assert v18.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
+    # 既定はまだ v17
+    assert PROMPT_VERSION == "v17"
