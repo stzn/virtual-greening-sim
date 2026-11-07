@@ -323,3 +323,20 @@ def test_プロンプトv16は雨の条件を全てtrueで満たす向きのキ�
         ]
     # 既定は v16
     assert PROMPT_VERSION == "v16"
+
+
+def test_プロンプトv17は水分キーの使う行を説明に添え_他はv16と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v16, v17 = PROMPTS["v16"], PROMPTS["v17"]
+    assert v17 != v16 and "v17" in PROMPT_REQUIRES_COND_OBS
+    keys = {r.split("`")[1]: r for r in v17.splitlines() if r.startswith("- `") and "`: " in r}
+    # moisture_below_30 は行 #2・#4、moisture_below_40 は行 #1 でだけ使う（取り違え防止）
+    assert "（行 #2・#4 で使う）" in keys["moisture_below_30"]
+    assert "（行 #1 でだけ使う）" in keys["moisture_below_40"]
+    assert all(len(line) < 110 for line in keys.values())
+    # キーの並びと、チェックリストの行は v16 と同じ
+    assert list(keys) == [r.split("`")[1] for r in v16.splitlines() if r.startswith("- `") and "`: " in r]
+    assert v17.split("## 判断チェックリスト")[1] == v16.split("## 判断チェックリスト")[1]
+    # 既定はまだ v16
+    assert PROMPT_VERSION == "v16"
