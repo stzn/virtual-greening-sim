@@ -157,7 +157,9 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset(
+        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"}
+    )
     assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
 
 

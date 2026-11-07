@@ -482,8 +482,19 @@ for _old17, _new17 in _V17_REPLACEMENTS:
     assert _old17 in SYSTEM_PROMPT_V17, _old17
     SYSTEM_PROMPT_V17 = SYSTEM_PROMPT_V17.replace(_old17, _new17)
 
+# v17 でも qwen3 は「雨が近い猛暑の C・水分適正」で 0/5 だった。判断メモに `rain_leaves_dry false` と書きながら行 #3 を
+# 「該当」と結論する（かつ で並ぶ条件のうち false/× を見ても AND にしない）。読み違いではなく照合の漏れ。
+# repro（10 回、v17 0/10、行 #3 の並べ替え 2/10、行 #3 に注記 3/10）に対し、手順 4 に規則を足す案は 6/10・7/10。
+_V18_ADDED = (
+    "「かつ」で並ぶ条件は、**× が 1 つでもあればその行は非該当**（他が全部 ○ でも該当にしない）。"
+    "× を書いた行を「該当」と書いてはならない。"
+)
+_V18_ANCHOR = "「または」の条件は、どちらか一方でも満たせば ○、両方満たさなければ ×。"
+assert _V18_ANCHOR in SYSTEM_PROMPT_V17
+SYSTEM_PROMPT_V18 = SYSTEM_PROMPT_V17.replace(_V18_ANCHOR, _V18_ANCHOR + _V18_ADDED)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"})
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -639,6 +650,7 @@ PROMPTS: dict[str, str] = {
     "v15": SYSTEM_PROMPT_V15,
     "v16": SYSTEM_PROMPT_V16,
     "v17": SYSTEM_PROMPT_V17,
+    "v18": SYSTEM_PROMPT_V18,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
