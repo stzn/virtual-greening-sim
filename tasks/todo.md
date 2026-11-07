@@ -94,3 +94,5 @@
 - [x] v16: 雨キーを rain_leaves_dry（true で散水可）に反転。qwen3 28/30、Haiku 30/30、tradeoff 92.7・dry_before_rain 65.7・scarce_water 77.1（docs/eval-results.md）
 - [x] 既定を v16 に切り替えた（ユーザー指示）
 - [ ] scarce_water が v13（81.1）に届かない原因を調べる／C の暑熱緩和 2 件（タンク 4000ml 未満・雨が近い猛暑）の不安定さ
+- [x] scarce_water 調査: 早すぎる散水（水分30%以上、v16 6/10）が原因。行 #2 の moisture_below_30 を行 #1 の moisture_below_40 と取り違える（docs/eval-results.md）
+- [ ] v17: 水分キーの取り違えを防ぐ（行 #2 の条件の書き方・キー名）
