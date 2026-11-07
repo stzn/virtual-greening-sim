@@ -295,3 +295,31 @@ def test_既定のプロンプトは条件観測を要する版なので_指定�
     assert prompt_requires_cond_obs("v15") is True
     assert prompt_requires_cond_obs("v9") is False
     assert prompt_requires_cond_obs("free") is False
+
+
+def test_プロンプトv16は雨の条件を全てtrueで満たす向きのキーにそろえ_他はv15と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v13, v15, v16 = PROMPTS["v13"], PROMPTS["v15"], PROMPTS["v16"]
+    assert v16 != v15 and "v16" in PROMPT_REQUIRES_COND_OBS
+    # 旧キー（v15 の rain_covers_irrigation、v13 の rain_within_3h）は使わない
+    assert "rain_covers_irrigation" not in v16 and "rain_within_3h" not in v16
+    rule, table = v16.split("## 判断チェックリスト")
+    assert "`rain_leaves_dry` が false の間は irrigate を呼ばない" in rule
+    row2 = next(r for r in table.splitlines() if r.startswith("| 2 |"))
+    row3 = next(r for r in table.splitlines() if r.startswith("| 3 |"))
+    # 散水行の雨の条件は「が true」（false を条件にすると qwen3 が不成立と誤読する）
+    assert "`rain_leaves_dry` が true" in row2 and "`rain_leaves_dry` が false" not in row2
+    assert "`rain_leaves_dry` が true" in row3 and "`rain_leaves_dry` が false" not in row3
+    # キー一覧は新しいキーを末尾（in_sunlight の次）に短く置く
+    keys = [r for r in v16.splitlines() if r.startswith("- `") and "`: " in r]
+    assert keys[-1].startswith("- `rain_leaves_dry`:") and keys[-2].startswith("- `in_sunlight`:")
+    assert len(keys[-1]) < 110
+    # 他の行（#1・#4・#5）は v13 と同じ
+    for n in (1, 4, 5):
+        prefix = f"| {n} |"
+        assert [r for r in v16.splitlines() if r.startswith(prefix)] == [
+            r for r in v13.splitlines() if r.startswith(prefix)
+        ]
+    # 既定はまだ v15
+    assert PROMPT_VERSION == "v15"
