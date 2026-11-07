@@ -91,3 +91,6 @@
 - [ ] v15 の wet_rain・tradeoff の確認、行 #1 の誤選択と C の暑熱緩和の不安定さ
 - [x] v15 の wet_rain・tradeoff を確認: wet_rain は全構成同じ、tradeoff は v15 が −5.3（87.3）。原因は行 #2 の「`rain_covers_irrigation` が false」を false=不成立と読む否定の読み違い（docs/eval-results.md）
 - [ ] v16: 行 #2・#3 の雨の条件を「true で散水してよい」の向きに反転する（tradeoff・scarce_water の退行を直す）
+- [x] v16: 雨キーを rain_leaves_dry（true で散水可）に反転。qwen3 28/30、Haiku 30/30、tradeoff 92.7・dry_before_rain 65.7・scarce_water 77.1（docs/eval-results.md）
+- [ ] 既定を v16 に切り替えるか決める（結果を見てユーザー確認）
+- [ ] scarce_water が v13（81.1）に届かない原因を調べる／C の暑熱緩和 2 件（タンク 4000ml 未満・雨が近い猛暑）の不安定さ
