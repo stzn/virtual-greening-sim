@@ -217,6 +217,11 @@ def test_プロンプトv15は雨の禁止を雨だけで水分が足りるか�
     row3 = next(r for r in table.splitlines() if r.startswith("| 3 |"))
     assert "`rain_covers_irrigation` が false" in row2
     assert "`rain_covers_irrigation` が false" in row3
+    # キー一覧は旧キーを外し、新しいキーを末尾（in_sunlight の次）に短く置く（先頭の長い説明は qwen3 が行 #1 を誤る）
+    keys = [r for r in v15.splitlines() if r.startswith("- `") and "`: " in r]
+    assert keys[-1].startswith("- `rain_covers_irrigation`:")
+    assert keys[-2].startswith("- `in_sunlight`:")
+    assert len(keys[-1]) < 110
     # 他の行（#1・#4・#5）は v13 と同じ
     for n in (1, 4, 5):
         prefix = f"| {n} |"
