@@ -190,16 +190,24 @@ class World:
 
         moisture_band の境界は下限を含む（30 ちょうどは "30-40"）。70 ちょうどは "50-70"、">70" は 70 超。
         降水確率が不明（None）の時間は、確率の条件を満たさないものとして扱う。
+        rain_covers_irrigation は、雨が近く（rain_within_3h）、かつ今の水分に今後3時間の降水量の合計
+        （1mmあたり rain_gain_per_mm）を足すと適正下限（30）以上になるときだけ true。
         """
         if not self.condition_observations_enabled:
             return None
         now = self.clock.now
+        forecast = self.weather.forecast(now, RAIN_LOOKAHEAD_HOURS)
         rain = any(
             (f.precipitation_prob_pct or 0.0) >= RAIN_PROB_PCT or f.precipitation_mm >= RAIN_MM
-            for f in self.weather.forecast(now, RAIN_LOOKAHEAD_HOURS)
+            for f in forecast
         )
         w = self.current_weather()
         moisture = self.plant.moisture
+        # 予報の雨だけで適正下限に届くか（降水1mmあたりの水分増加は世界の係数）
+        rain_total_mm = sum(f.precipitation_mm for f in forecast)
+        rain_covers = rain and (
+            moisture + self.params.rain_gain_per_mm * rain_total_mm >= MOISTURE_BELOW_LOW
+        )
         if moisture > MOISTURE_HIGH_ABOVE:
             band = MOISTURE_BAND_HIGH
         else:
@@ -219,6 +227,7 @@ class World:
             "temp_at_least_33": w.temperature_c >= HEAT_TEMP_C,
             "moisture_50_to_70": MOISTURE_HEAT_RELIEF[0] <= moisture <= MOISTURE_HEAT_RELIEF[1],
             "tank_at_least_4000": self.plant.water_tank_ml >= TANK_HEAT_RELIEF_ML,
+            "rain_covers_irrigation": rain_covers,
         }
 
     # --- 時間経過 ---

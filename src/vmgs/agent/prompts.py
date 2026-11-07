@@ -384,8 +384,42 @@ SYSTEM_PROMPT_V14 = SYSTEM_PROMPT_V13
 for _old14, _new14 in _V14_REPLACEMENTS:
     assert _old14 in SYSTEM_PROMPT_V14, _old14
     SYSTEM_PROMPT_V14 = SYSTEM_PROMPT_V14.replace(_old14, _new14)
+# v15: v13 を直す。dry_before_rain（水分 12%・弱い雨が降り続く）で v13 は規則どおり 24 回とも散水せず、
+# 健康度が 100→78 に落ちた。「雨が近い間は irrigate しない」が、雨だけでは水分が足りない状況でも効いていた。
+# 雨の条件を、世界側の事実 rain_covers_irrigation（雨が近く、かつ予報の雨だけで水分が 30% に届く）に置き換える。
+# 禁止ルールと #2・#3 の条件を同じ 1 つのキーにそろえ、モデルに AND を組み立てさせない。
+_V15_REPLACEMENTS = (
+    (
+        "- `rain_within_3h`: 今後3時間の予報のどれかで、降水確率 60% 以上 または 降水量 1mm 以上なら true\n",
+        (
+            "- `rain_covers_irrigation`: 今後3時間の予報のどれかで、降水確率 60% 以上 または 降水量 1mm 以上"
+            "（雨が近い）で、かつ予報の雨だけで土壌水分が 30% に届くなら true。"
+            "雨が近くても、雨だけでは 30% に届かないなら false\n"
+        ),
+    ),
+    (
+        "- `rain_within_3h` が true の間は irrigate を呼ばない（雨が水を与えるので散水は無駄）。",
+        (
+            "- `rain_covers_irrigation` が true の間は irrigate を呼ばない"
+            "（予報の雨だけで水分が足りるので散水は無駄）。"
+        ),
+    ),
+    (
+        "| 2 | `moisture_below_30` が true、かつ `rain_within_3h` が false、",
+        "| 2 | `moisture_below_30` が true、かつ `rain_covers_irrigation` が false、",
+    ),
+    (
+        "土壌水分 50〜70%、水タンク 4000ml 以上、`rain_within_3h` が false |",
+        "土壌水分 50〜70%、水タンク 4000ml 以上、`rain_covers_irrigation` が false |",
+    ),
+)
+SYSTEM_PROMPT_V15 = SYSTEM_PROMPT_V13
+for _old15, _new15 in _V15_REPLACEMENTS:
+    assert _old15 in SYSTEM_PROMPT_V15, _old15
+    SYSTEM_PROMPT_V15 = SYSTEM_PROMPT_V15.replace(_old15, _new15)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15"})
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -538,6 +572,7 @@ PROMPTS: dict[str, str] = {
     "v12": SYSTEM_PROMPT_V12,
     "v13": SYSTEM_PROMPT_V13,
     "v14": SYSTEM_PROMPT_V14,
+    "v15": SYSTEM_PROMPT_V15,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
