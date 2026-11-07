@@ -97,6 +97,16 @@
     もし get_plant_state を呼ぶ
     ならば rain_covers_irrigation は true である
 
+  シナリオ: 3時間目の雨も合計に入る
+    前提 条件観測が有効である
+    かつ 土壌水分は 12% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | 1        | 60       | 3      |
+      | 3        | 60       | 3      |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は true である
+
   シナリオ: 弱い雨が続いても、合計で届かなければ false である（dry_before_rain の状況）
     前提 条件観測が有効である
     かつ 土壌水分は 12% である
