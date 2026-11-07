@@ -463,8 +463,27 @@ for _old16, _new16 in _V16_REPLACEMENTS:
     assert _old16 in SYSTEM_PROMPT_V16, _old16
     SYSTEM_PROMPT_V16 = SYSTEM_PROMPT_V16.replace(_old16, _new16)
 
+# v17: v16 の早すぎる散水を減らす。scarce_water で v16 は水分 30% 以上の夜間（A・水分 32〜38%）に散水し、
+# 判断メモで行 #2 の moisture_below_30 を行 #1 の moisture_below_40 と取り違えていた（水分 30% 以上での散水
+# baseline 0/10、v13 3/10、v16 6/10）。キー説明に「使う行」を添える（repro 夜間 32 回: v16 30/32、行 #2 に注記する案 26/32、
+# 本案 32/32）。キー説明は 110 文字未満のまま（長いと qwen3 が行 #1 を誤選択する）。
+_V17_REPLACEMENTS = (
+    (
+        "- `moisture_below_30`: 土壌水分が 30% 未満なら true（30 ちょうどは false）\n",
+        "- `moisture_below_30`: 土壌水分が 30% 未満なら true（30 ちょうどは false）（行 #2・#4 で使う）\n",
+    ),
+    (
+        "- `moisture_below_40`: 土壌水分が 40% 未満なら true\n",
+        "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #1 でだけ使う）\n",
+    ),
+)
+SYSTEM_PROMPT_V17 = SYSTEM_PROMPT_V16
+for _old17, _new17 in _V17_REPLACEMENTS:
+    assert _old17 in SYSTEM_PROMPT_V17, _old17
+    SYSTEM_PROMPT_V17 = SYSTEM_PROMPT_V17.replace(_old17, _new17)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17"})
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -619,6 +638,7 @@ PROMPTS: dict[str, str] = {
     "v14": SYSTEM_PROMPT_V14,
     "v15": SYSTEM_PROMPT_V15,
     "v16": SYSTEM_PROMPT_V16,
+    "v17": SYSTEM_PROMPT_V17,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

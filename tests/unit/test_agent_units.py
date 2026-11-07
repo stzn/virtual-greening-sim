@@ -157,7 +157,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14", "v15", "v16"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17"})
     assert PROMPT_VERSION == "v16" and SYSTEM_PROMPT == PROMPTS["v16"]
 
 
@@ -336,7 +336,9 @@ def test_プロンプトv17は水分キーの使う行を説明に添え_他はv
     assert "（行 #1 でだけ使う）" in keys["moisture_below_40"]
     assert all(len(line) < 110 for line in keys.values())
     # キーの並びと、チェックリストの行は v16 と同じ
-    assert list(keys) == [r.split("`")[1] for r in v16.splitlines() if r.startswith("- `") and "`: " in r]
+    assert list(keys) == [
+        r.split("`")[1] for r in v16.splitlines() if r.startswith("- `") and "`: " in r
+    ]
     assert v17.split("## 判断チェックリスト")[1] == v16.split("## 判断チェックリスト")[1]
     # 既定はまだ v16
     assert PROMPT_VERSION == "v16"
