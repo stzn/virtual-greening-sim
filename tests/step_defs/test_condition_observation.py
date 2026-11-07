@@ -1,5 +1,6 @@
 """条件観測（チェックリストの条件の真偽）。"""
 
+import dataclasses
 from datetime import timedelta
 from typing import Any
 
@@ -25,6 +26,7 @@ OBS_KEYS = (
     "temp_at_least_33",
     "moisture_50_to_70",
     "tank_at_least_4000",
+    "rain_covers_irrigation",
 )
 
 
@@ -76,6 +78,11 @@ def _g_forecast(ctx: Ctx, datatable: list[list[str]]) -> None:
     ctx.world.weather = SeriesWeather(records)
 
 
+@given(parsers.parse("降水1mmあたりの水分増加は {v:g}% である"))
+def _g_rain_gain(ctx: Ctx, v: float) -> None:
+    ctx.world.params = dataclasses.replace(ctx.world.params, rain_gain_per_mm=float(v))
+
+
 @when("get_plant_state を呼ぶ")
 def _w_state(ctx: Ctx, cc: CondCtx) -> None:
     cc.result = ToolBox(ctx.world).call("get_plant_state")
@@ -101,7 +108,8 @@ def _t_same(ctx: Ctx, cc: CondCtx) -> None:
 @then(
     "条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・"
     "moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・"
-    "temp_at_least_33・moisture_50_to_70・tank_at_least_4000 の11個だけである"
+    "temp_at_least_33・moisture_50_to_70・tank_at_least_4000・"
+    "rain_covers_irrigation の12個だけである"
 )
 def _t_only_seven(ctx: Ctx, cc: CondCtx) -> None:
     ctx.world.condition_observations_enabled = False

@@ -157,7 +157,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key in v11
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
-    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14"})
+    assert PROMPT_REQUIRES_COND_OBS == frozenset({"v11", "v12", "v13", "v14", "v15"})
     assert PROMPT_VERSION == "v13" and SYSTEM_PROMPT == PROMPTS["v13"]
 
 
@@ -201,6 +201,35 @@ def test_プロンプトv14は行3の数値条件をキーで指し_他の行は
             r for r in v13.splitlines() if r.startswith(prefix)
         ]
     assert PROMPT_VERSION == "v13" and SYSTEM_PROMPT == PROMPTS["v13"]
+
+
+def test_プロンプトv15は雨の禁止を雨だけで水分が足りるかのキーで指し_他はv13のまま() -> None:
+    from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, SYSTEM_PROMPT
+
+    v13, v15 = PROMPTS["v13"], PROMPTS["v15"]
+    assert v15 != v13
+    assert "`rain_covers_irrigation`" in v15 and "rain_covers_irrigation" not in v13
+    # 雨の判定は新しいキーに置き換わり、旧キー rain_within_3h は使わない
+    assert "rain_within_3h" not in v15
+    rule, table = v15.split("## 判断チェックリスト")
+    assert "`rain_covers_irrigation` が true の間は irrigate を呼ばない" in rule
+    row2 = next(r for r in table.splitlines() if r.startswith("| 2 |"))
+    row3 = next(r for r in table.splitlines() if r.startswith("| 3 |"))
+    assert "`rain_covers_irrigation` が false" in row2
+    assert "`rain_covers_irrigation` が false" in row3
+    # 他の行（#1・#4・#5）は v13 と同じ
+    for n in (1, 4, 5):
+        prefix = f"| {n} |"
+        assert [r for r in v15.splitlines() if r.startswith(prefix)] == [
+            r for r in v13.splitlines() if r.startswith(prefix)
+        ]
+    assert PROMPT_VERSION == "v13" and SYSTEM_PROMPT == PROMPTS["v13"]  # 既定は効果を測るまで v13
+
+
+def test_プロンプトv15を選んだ構成は条件観測を有効にする() -> None:
+    from vmgs.experiment.configs import parse_config_spec
+
+    assert parse_config_spec("llm:ollama:qwen3:14b:v15").condition_observations is True
 
 
 def test_プロンプトv13は雨を表から外した禁止ルールにし_日向をキーで指す() -> None:

@@ -12,7 +12,7 @@
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー は含まれない
 
-  シナリオ: 有効にすると、条件観測のキーが11個返る
+  シナリオ: 有効にすると、条件観測のキーが12個返る
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー が含まれる
@@ -25,7 +25,7 @@
   シナリオ: 判断基準（行番号・推奨行動）は含まれない
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
-    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・temp_at_least_33・moisture_50_to_70・tank_at_least_4000 の11個だけである
+    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・temp_at_least_33・moisture_50_to_70・tank_at_least_4000・rain_covers_irrigation の12個だけである
 
   # --- 雨 ---
   シナリオテンプレート: 今後3時間以内の降水確率・降水量で rain_within_3h が決まる
@@ -49,6 +49,74 @@
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば rain_within_3h は false である
+
+  # --- 雨だけで水分が足りるか ---
+  # 予報の雨が降る前提で、今の水分 + 降水量の合計 × 3（降水1mmあたり +3%）が適正下限の 30% に届くなら true。
+  # rain_within_3h が false（雨が近くない）なら常に false。
+  シナリオテンプレート: 雨が近く、予報の雨だけで水分が30%に届くときだけ rain_covers_irrigation は true になる
+    前提 条件観測が有効である
+    かつ 土壌水分は <水分>% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | <時間>   | <確率>   | <降水量> |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は <結果> である
+
+    例:
+      | 水分 | 時間 | 確率 | 降水量 | 結果  |
+      | 12   | 1    | 60   | 6      | true  |
+      | 12   | 1    | 60   | 5.9    | false |
+      | 15   | 3    | 65   | 0      | false |
+      | 20   | 2    | 30   | 1.5    | false |
+      | 20   | 2    | 80   | 5      | true  |
+      | 60   | 2    | 70   | 2      | true  |
+      | 20   | 4    | 90   | 8      | false |
+
+  シナリオ: 雨が近くなければ、水分が足りていても rain_covers_irrigation は false である
+    前提 条件観測が有効である
+    かつ 土壌水分は 45% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | 2        | 10       | 0.5    |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は false である
+
+  シナリオ: 予報が無ければ rain_covers_irrigation は false である
+    前提 条件観測が有効である
+    かつ 土壌水分は 12% である
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は false である
+
+  シナリオ: 降水量は今後3時間の合計で見る（1時間だけでは届かず、合計で届く）
+    前提 条件観測が有効である
+    かつ 土壌水分は 12% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | 1        | 60       | 3      |
+      | 2        | 60       | 3      |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は true である
+
+  シナリオ: 弱い雨が続いても、合計で届かなければ false である（dry_before_rain の状況）
+    前提 条件観測が有効である
+    かつ 土壌水分は 12% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | 1        | 60       | 0.3    |
+      | 2        | 5        | 0      |
+      | 3        | 90       | 1.2    |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は false である
+
+  シナリオ: 降水1mmあたりの水分増加の設定に追従する
+    前提 条件観測が有効である
+    かつ 降水1mmあたりの水分増加は 1% である
+    かつ 土壌水分は 20% である
+    かつ 次の予報が与えられている
+      | 何時間後 | 降水確率 | 降水量 |
+      | 2        | 80       | 5      |
+    もし get_plant_state を呼ぶ
+    ならば rain_covers_irrigation は false である
 
   # --- 暑さ ---
   シナリオテンプレート: 気温か日射のどちらかが閾値以上なら heat_trigger は true になる
