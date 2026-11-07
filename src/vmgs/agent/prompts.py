@@ -424,8 +424,47 @@ for _old15, _new15 in _V15_REPLACEMENTS:
     assert _old15 in SYSTEM_PROMPT_V15, _old15
     SYSTEM_PROMPT_V15 = SYSTEM_PROMPT_V15.replace(_old15, _new15)
 
+# v16: v15 の向きを直す。行 #2・#3 の条件が「rain_covers_irrigation が false」で、qwen3 は判断メモに
+# 「rain_covers_irrigation=false ×」と書き、false 自体を不成立と読んで、雨なしの B でも散水を 3 時間遅らせた
+# （誤読率 tradeoff 7/35、scarce_water 5/92）。世界側のキーを反転した rain_leaves_dry（雨が散水の代わりにならない
+# なら true）に置き換え、散水行の雨の条件を「が true」にそろえる。物理・境界は v15 と同じ。
+_V16_REPLACEMENTS = (
+    (
+        (
+            "- `rain_covers_irrigation`: 雨が近く（今後3時間に降水確率 60% 以上 または 降水量 1mm 以上）、"
+            "かつ予報の雨だけで土壌水分が 30% に届くなら true\n"
+        ),
+        (
+            "- `rain_leaves_dry`: 雨が降らない、または予報の雨だけでは土壌水分が 30% に届かないなら true"
+            "（雨が散水の代わりにならない）\n"
+        ),
+    ),
+    (
+        (
+            "- `rain_covers_irrigation` が true の間は irrigate を呼ばない"
+            "（予報の雨だけで水分が足りるので散水は無駄）。"
+        ),
+        (
+            "- `rain_leaves_dry` が false の間は irrigate を呼ばない"
+            "（予報の雨だけで水分が足りるので散水は無駄）。"
+        ),
+    ),
+    (
+        "かつ `rain_covers_irrigation` が false、",
+        "かつ `rain_leaves_dry` が true、",
+    ),
+    (
+        "`rain_covers_irrigation` が false |",
+        "`rain_leaves_dry` が true |",
+    ),
+)
+SYSTEM_PROMPT_V16 = SYSTEM_PROMPT_V15
+for _old16, _new16 in _V16_REPLACEMENTS:
+    assert _old16 in SYSTEM_PROMPT_V16, _old16
+    SYSTEM_PROMPT_V16 = SYSTEM_PROMPT_V16.replace(_old16, _new16)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15"})
+PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16"})
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -579,6 +618,7 @@ PROMPTS: dict[str, str] = {
     "v13": SYSTEM_PROMPT_V13,
     "v14": SYSTEM_PROMPT_V14,
     "v15": SYSTEM_PROMPT_V15,
+    "v16": SYSTEM_PROMPT_V16,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

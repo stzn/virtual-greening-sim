@@ -190,8 +190,9 @@ class World:
 
         moisture_band の境界は下限を含む（30 ちょうどは "30-40"）。70 ちょうどは "50-70"、">70" は 70 超。
         降水確率が不明（None）の時間は、確率の条件を満たさないものとして扱う。
-        rain_covers_irrigation は、雨が近く（rain_within_3h）、かつ今の水分に今後3時間の降水量の合計
-        （1mmあたり rain_gain_per_mm）を足すと適正下限（30）以上になるときだけ true。
+        rain_leaves_dry は、雨が近くない、または近くても今の水分に今後3時間の降水量の合計
+        （1mmあたり rain_gain_per_mm）を足して適正下限（30）に届かないとき true（雨が散水の代わりにならない）。
+        散水の条件を「true で満たす」向きにそろえるため、「雨が足りる」の否定で持つ。
         """
         if not self.condition_observations_enabled:
             return None
@@ -227,7 +228,7 @@ class World:
             "temp_at_least_33": w.temperature_c >= HEAT_TEMP_C,
             "moisture_50_to_70": MOISTURE_HEAT_RELIEF[0] <= moisture <= MOISTURE_HEAT_RELIEF[1],
             "tank_at_least_4000": self.plant.water_tank_ml >= TANK_HEAT_RELIEF_ML,
-            "rain_covers_irrigation": rain_covers,
+            "rain_leaves_dry": not rain_covers,
         }
 
     # --- 時間経過 ---
