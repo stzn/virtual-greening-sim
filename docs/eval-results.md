@@ -1315,3 +1315,18 @@ v9 の #1（雨）と #2（退避）の条件欄を、含む・含まないま�
 - 変更: `PROMPT_VERSION` と `SYSTEM_PROMPT` を v15 にした。v15 は条件観測を要するので、プロンプト指定なしでも条件観測は有効（`prompt_requires_cond_obs`）。
 - v9・v13 を使うには `--prompt v9` / 構成の `:v13` / `EVAL_PROMPT=v13`。ただし評価の仕様を変えたため、v9・v13 は評価 2 件（雨だけでは水分が届かない状況で散水する）で落ちる。
 - 未確認: `wet_rain`・`tradeoff` での v15、qwen3 の基本シナリオの行 #1 誤選択と C の暑熱緩和（#3）の不安定さ、Sonnet での評価。
+
+### v15 の wet_rain・tradeoff（24 時間通し、qwen3:14b、各5バリアント）
+`vmgs experiment --suite stress --conditions wet_rain,tradeoff --name s_v15_b --variants 5 --seed 0 --configs baseline,llm:ollama:qwen3:14b:v15`（`OLLAMA_TIMEOUT_S=600`）
+
+| 状況 | baseline | v9 | v13 | v15 |
+| --- | --- | --- | --- | --- |
+| wet_rain | 63.6±0.0 | 63.6±0.0 | 63.6±0.0 | 63.6±0.0 |
+| tradeoff | 92.6±8.0 | 92.5±8.0 | 92.6±8.0 | **87.3±9.5** |
+
+- `wet_rain`: 4 構成とも同じ（わなに引っかからず、差も付かない）。
+- `tradeoff`: v15 は v9・v13 より −5.3。バリアント別 v15: 89.1 / 79.7 / 76.1 / 91.4 / 100.0（v13: 100.0 / 80.6 / 91.2 / 91.4 / 100.0）。baseline に 0 勝 3 分 2 敗（バリアント0・2）。
+- 原因（トレース）: v15 は B で水分 21.9%・雨なし（降水確率5%）なのに、15〜17 時に散水せず（v13 は 15 時に 1000ml）。判断メモは「#2: moisture_below_30=true ○、**rain_covers_irrigation=false ×** → 非該当」。行 #2 の条件は「`rain_covers_irrigation` が **false**」なのに、キーの値が false であること自体を ×（不成立）と読んでいる。「雨が散水をカバーしていない」を満たすべき条件として false が必要、という否定の否定を、qwen3 が逆に読む。v13 の `rain_within_3h が false`（雨が近くない）は自然に読めていた。
+- 頻度: 行 #2 の判断メモのうち「`rain_covers_irrigation` = false ×」と書いたステップは、tradeoff 35 件中 7、scarce_water 92 件中 5、dry_before_rain 72 件中 0。`scarce_water` の v13 比 −4.7 と `tradeoff` の −5.3 は、同じ読み違いで説明できる（`dry_before_rain` は「雨が近い」側の禁止ルールが効く状況で、false を条件にする行 #2 を使わないため影響がない）。
+- 4 状況の平均（v9 / v13 / v15）: dry_before_rain 53.4 / 32.7 / 66.6、scarce_water 75.2 / 81.1 / 76.4、wet_rain 63.6 / 63.6 / 63.6、tradeoff 92.5 / 92.6 / 87.3 → 平均 71.2 / 67.5 / 73.5。v15 が最良だが、tradeoff・scarce_water の退行は未解決。
+- 次の手: 行 #2・#3 の条件の向きを「true で散水してよい」にそろえる（例: 雨だけでは足りないとき true になるキーに反転し、禁止ルールは false を使う）。キー名は「false が条件」にならない向きにする。

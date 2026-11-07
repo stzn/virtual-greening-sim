@@ -89,3 +89,5 @@
 - [x] 残り3状況（dry_before_rain / wet_rain / tradeoff）で v9 と v13 を比較: wet_rain・tradeoff は同じ、**dry_before_rain は v13 が退行（53.4→32.7）**。原因は v13 の雨の散水禁止ルール（推定）。docs/eval-results.md
 - [x] v15（雨の禁止を「雨だけで水分が足りるか」で条件づけ）: dry_before_rain 32.7→66.6、scarce_water 81.1→76.4、qwen3 全件評価 25/30（境界シナリオ修正で+1）、Haiku 30/30。既定を v15 に変更済み（docs/eval-results.md）
 - [ ] v15 の wet_rain・tradeoff の確認、行 #1 の誤選択と C の暑熱緩和の不安定さ
+- [x] v15 の wet_rain・tradeoff を確認: wet_rain は全構成同じ、tradeoff は v15 が −5.3（87.3）。原因は行 #2 の「`rain_covers_irrigation` が false」を false=不成立と読む否定の読み違い（docs/eval-results.md）
+- [ ] v16: 行 #2・#3 の雨の条件を「true で散水してよい」の向きに反転する（tradeoff・scarce_water の退行を直す）
