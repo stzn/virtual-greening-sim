@@ -63,6 +63,11 @@ def _llm_script(actx: AgentCtx, datatable: list[list[str]]) -> None:
         if row["応答"] == "ツール呼び出し":
             args = json.loads(row["引数"] or "{}")
             responses.append(tool_call_message(row["ツール"], args, f"call_{i}"))
+        elif row["応答"] == "本文のツール呼び出し":
+            call = {"name": row["ツール"], "arguments": json.loads(row["引数"] or "{}")}
+            responses.append(_final(json.dumps(call, ensure_ascii=False)))
+        elif row["応答"] == "本文":
+            responses.append(_final(row["要約"]))
         else:
             responses.append(_final(_json_body(row["要約"])))
     actx.model = ScriptedChatModel(responses=responses)
@@ -167,6 +172,16 @@ def _retried(actx: AgentCtx) -> None:
 @then("判断は再確認を経ていない")
 def _not_retried(actx: AgentCtx) -> None:
     assert _result(actx).decision.claim_retry is False
+
+
+@then("判断はツール呼び出しの形式の再確認を経ている")
+def _text_tool_retried(actx: AgentCtx) -> None:
+    assert _result(actx).decision.text_tool_call_retry is True
+
+
+@then("判断はツール呼び出しの形式の再確認を経ていない")
+def _text_tool_not_retried(actx: AgentCtx) -> None:
+    assert _result(actx).decision.text_tool_call_retry is False
 
 
 @then("判断は宣言のみとして記録される")
