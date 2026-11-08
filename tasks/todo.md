@@ -103,3 +103,5 @@
 - [x] v19 + 形式の失敗の救済: 全評価 qwen3 31/31・Haiku 31/31、24 時間通しは v17 と同等（docs/eval-results.md）
 - [x] v19 の「宣言のみ」増加は、空タンクでの irrigate 失敗後の要約表現のみで無害（docs/eval-results.md）
 - [x] 既定を v19 に切替
+- [x] 評価シナリオを 10 件追加（conjunction.feature、計 41 件）。v19: Haiku 41/41、qwen3 40/41
+- [ ] qwen3 の未達: 日射だけが強い歩道C（気温 31・水分 60）で、moisture_below_40 が false なのに B へ移動する（行 #2 の AND の取りこぼし）。repro は /private/tmp/.../scratchpad/repro20.py（v19 で 4/10）
