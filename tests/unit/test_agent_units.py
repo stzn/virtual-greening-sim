@@ -362,3 +362,22 @@ def test_プロンプトv18は判断メモの手順に_1つでも_なら非該�
     assert v18.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
     # 既定はまだ v17
     assert PROMPT_VERSION == "v17"
+
+
+def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1つが罰点なら非該当_の例を足し_他はv17と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v17, v19 = PROMPTS["v17"], PROMPTS["v19"]
+    assert v19 != v17 and "v19" in PROMPT_REQUIRES_COND_OBS
+    step4 = v19.split("4. 判断メモを書く。")[1].split("5. ")[0]
+    assert "「#3: C ○・気温 ○・水分 ○・タンク ○・`rain_leaves_dry` が false × → 非該当」" in step4
+    # 規則の文は足さない（全行に効く指示にしない）。差分は例の 1 文だけ
+    added = (
+        "条件が 5 つ並ぶ行で 4 つが ○ でも、1 つが × なら非該当"
+        "（例: 「#3: C ○・気温 ○・水分 ○・タンク ○・`rain_leaves_dry` が false × → 非該当」）。"
+    )
+    assert v19.replace(added, "") == v17
+    # チェックリストとキー一覧は v17 と同じ
+    assert v19.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
+    # 既定はまだ v17
+    assert PROMPT_VERSION == "v17"
