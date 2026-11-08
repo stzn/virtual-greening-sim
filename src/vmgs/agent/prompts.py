@@ -493,8 +493,22 @@ _V18_ANCHOR = "「または」の条件は、どちらか一方でも満たせ�
 assert _V18_ANCHOR in SYSTEM_PROMPT_V17
 SYSTEM_PROMPT_V18 = SYSTEM_PROMPT_V17.replace(_V18_ANCHOR, _V18_ANCHOR + _V18_ADDED)
 
+# v17 の qwen3 は「雨が近い猛暑の C・水分適正」で 0/5。判断メモに `rain_leaves_dry false` と書きながら行 #3 を「該当」と
+# 結論する（かつ で並ぶ条件に false があっても AND にしない）。v18 は全行向けの規則を足して対象は直ったが、Haiku の退行と
+# qwen3 の生成の暴走が出た。v19 は規則を足さず、手順 4 に「5 つ中 4 つが ○ でも 1 つが × なら非該当」の例を 1 つ足す
+# （repro 10 回: v17 0/10、行 #3 を箇条書きにする案 2/10、本案 10/10）。
+_V19_EXAMPLE_ANCHOR = "（例: 「#2: 気温28<33 ×・日射400<700 × → 非該当」）。"
+_V19_ADDED = (
+    "条件が 5 つ並ぶ行で 4 つが ○ でも、1 つが × なら非該当"
+    "（例: 「#3: C ○・気温 ○・水分 ○・タンク ○・`rain_leaves_dry` が false × → 非該当」）。"
+)
+assert _V19_EXAMPLE_ANCHOR in SYSTEM_PROMPT_V17
+SYSTEM_PROMPT_V19 = SYSTEM_PROMPT_V17.replace(_V19_EXAMPLE_ANCHOR, _V19_EXAMPLE_ANCHOR + _V19_ADDED)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset({"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"})
+PROMPT_REQUIRES_COND_OBS = frozenset(
+    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"}
+)
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -651,6 +665,7 @@ PROMPTS: dict[str, str] = {
     "v16": SYSTEM_PROMPT_V16,
     "v17": SYSTEM_PROMPT_V17,
     "v18": SYSTEM_PROMPT_V18,
+    "v19": SYSTEM_PROMPT_V19,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

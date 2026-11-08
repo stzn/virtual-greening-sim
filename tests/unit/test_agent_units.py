@@ -158,7 +158,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
     assert PROMPT_REQUIRES_COND_OBS == frozenset(
-        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18"}
+        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"}
     )
     assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
 
@@ -364,7 +364,9 @@ def test_プロンプトv18は判断メモの手順に_1つでも_なら非該�
     assert PROMPT_VERSION == "v17"
 
 
-def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1つが罰点なら非該当_の例を足し_他はv17と同じ() -> None:
+def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1つが罰点なら非該当_の例を足し_他はv17と同じ() -> (
+    None
+):
     from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
 
     v17, v19 = PROMPTS["v17"], PROMPTS["v19"]
