@@ -55,6 +55,26 @@ def _extract_decision_json(text: str) -> dict[str, Any] | None:
     return found
 
 
+def _extract_text_tool_calls(text: str, tool_names: set[str]) -> set[str]:
+    """本文に書かれた、ツール呼び出しの形の JSON（{"name": ツール名, "arguments": {...}}）のツール名を返す。
+
+    qwen3 が判断メモのあとに、実際の tool_call ではなく本文の JSON でツールを呼んだつもりになる形式の失敗を見つける。
+    """
+    found: set[str] = set()
+    for m in re.finditer(r"\{", text):
+        try:
+            obj, _ = _DECODER.raw_decode(text, m.start())
+        except json.JSONDecodeError:
+            continue
+        if (
+            isinstance(obj, dict)
+            and obj.get("name") in tool_names
+            and isinstance(obj.get("arguments", obj.get("args")), dict)
+        ):
+            found.add(str(obj["name"]))
+    return found
+
+
 class TurnDecision(BaseModel):
     action_summary: str = ""
     rationale: str = ""
@@ -64,6 +84,9 @@ class TurnDecision(BaseModel):
     error: str | None = None
     raw_fallback: bool = False  # 最終回答がJSONにならず、本文をそのまま要約にした（要約崩れ）
     claim_retry: bool = False  # 要約が述べた行動が未実行だったため、再確認を促した
+    text_tool_call_retry: bool = (
+        False  # ツール呼び出しを本文の JSON で書いたため、ツールとして呼ぶよう促した
+    )
     unexecuted_claim: bool = False  # 再確認後も未実行で、要約を実際の行動で置き換えた（宣言のみ）
     claimed_summary: str | None = None  # 置き換える前の、モデルが述べた要約
 
@@ -104,6 +127,7 @@ class AgentState(TypedDict):
     truncated: bool
     nudged: bool  # 宣言と実行の不一致で、再確認を促し済み（1ターンに1回まで）
     retry_requested: bool  # 直前の verify が再確認を促した
+    text_tool_nudged: bool  # 再確認の理由が、ツール呼び出しを本文の JSON で書いたこと
     decision: TurnDecision | None
 
 
@@ -165,6 +189,16 @@ def nudge_text(claims: set[str], calls: list[ToolCallRecord]) -> str:
     return (
         text + "実行する場合は、いま対応するツールを呼び出してください。"
         "実行しない場合は、行動要約を実際の行動（何もしない等）に直して、最終回答のJSONを返し直してください。"
+    )
+
+
+def text_tool_call_nudge_text(names: set[str]) -> str:
+    """ツール呼び出しを本文の JSON で書いた形式の失敗を伝え、ツールとして呼ぶか、最終回答を返すかを選ばせる文面。"""
+    joined = "・".join(sorted(names))
+    return (
+        f"【確認】本文にツール呼び出し（{joined}）の JSON を書きましたが、ツールとしては呼び出されていません。"
+        "実行する場合は、本文ではなく、いまツールを呼び出してください。"
+        "実行しない場合は、最終回答のJSONを返してください。"
     )
 
 
@@ -242,6 +276,16 @@ def build_turn_graph(
         """最終回答が「実行した」と述べた行動に、成功したツール呼び出しが無ければ、1回だけ再確認を促す。"""
         ais = [m for m in state["messages"] if isinstance(m, AIMessage)]
         decision = parse_decision(message_text(ais[-1]) if ais else "")
+        if decision.raw_fallback and not state["nudged"]:
+            names = _extract_text_tool_calls(message_text(ais[-1]), {s.name for s in toolbox.specs})
+            if names:
+                nudge = HumanMessage(text_tool_call_nudge_text(names))
+                return {
+                    "messages": [nudge],
+                    "nudged": True,
+                    "retry_requested": True,
+                    "text_tool_nudged": True,
+                }
         if decision.raw_fallback or state["nudged"]:
             return {"retry_requested": False}  # 本文そのままの回答は宣言の判定が当てにならない
         mismatch = claimed_actions(decision.action_summary) - executed_actions(state["tool_log"])
@@ -254,7 +298,8 @@ def build_turn_graph(
         ais = [m for m in state["messages"] if isinstance(m, AIMessage)]
         text = message_text(ais[-1]) if ais else ""
         decision = parse_decision(text)
-        decision.claim_retry = state["nudged"]
+        decision.claim_retry = state["nudged"] and not state["text_tool_nudged"]
+        decision.text_tool_call_retry = state["text_tool_nudged"]
         if decision.raw_fallback:
             # 次ターンの記憶になる要約に本文（判断メモ）を入れない。実行した行動から作る
             decision.action_summary = summarize_executed(state["tool_log"])

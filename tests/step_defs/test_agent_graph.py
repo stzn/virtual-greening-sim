@@ -321,5 +321,6 @@ def test_agent_state_keys() -> None:
         "truncated",
         "nudged",
         "retry_requested",
+        "text_tool_nudged",
         "decision",
     }

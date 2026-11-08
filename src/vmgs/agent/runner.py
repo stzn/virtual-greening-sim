@@ -63,6 +63,7 @@ class AgentRunner:
             "truncated": False,
             "nudged": False,
             "retry_requested": False,
+            "text_tool_nudged": False,
             "decision": None,
         }
         config = cast(
