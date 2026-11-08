@@ -7,6 +7,7 @@ from pytest_bdd import parsers, scenarios, then, when
 
 from vmgs import cli
 from vmgs.agent.llm import make_chat_model
+from vmgs.config import Settings
 from vmgs.experiment.configs import parse_config_spec
 
 scenarios("agent/think_limit.feature")
@@ -56,6 +57,23 @@ def _w_ollama(
     lc: LimitCtx, limit: str, model: str, monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
     _make(lc, "ollama", model, limit, monkeypatch, tmp_path)
+
+
+@when(parsers.parse('思考オフで上限の指定なしで Ollama の "{model}" の LLM 設定を作る'))
+def _w_ollama_off(lc: LimitCtx, model: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OLLAMA_NUM_PREDICT", raising=False)
+    lc.chat = make_chat_model(
+        Settings(_env_file=None, llm_provider="ollama", llm_model=model)  # type: ignore[call-arg]
+    )
+
+
+@when(parsers.parse('思考オフで上限 {n:d} つきで Ollama の "{model}" の LLM 設定を作る'))
+def _w_ollama_off_n(lc: LimitCtx, n: int, model: str) -> None:
+    lc.chat = make_chat_model(
+        Settings(  # type: ignore[call-arg]
+            _env_file=None, llm_provider="ollama", llm_model=model, ollama_num_predict=n
+        )
+    )
 
 
 @when(parsers.parse('思考の制限なしで Ollama の "{model}" の LLM 設定を作る'))
