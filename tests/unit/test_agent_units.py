@@ -385,15 +385,17 @@ def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1�
     assert PROMPT_VERSION == "v19"
 
 
-def test_プロンプトv20は判断メモの手順に_真偽が混在する行の非該当の例を足し_他はv19と同じ() -> None:
+def test_プロンプトv20は_moisture_below_40_の説明に行1の条件と非該当を添え_他はv19と同じ() -> None:
     from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
 
     v19, v20 = PROMPTS["v19"], PROMPTS["v20"]
     assert v20 != v19 and "v20" in PROMPT_REQUIRES_COND_OBS
-    step4 = v20.split("4. 判断メモを書く。")[1].split("5. ")[0]
-    example = "（例: 「#1: 日向 ○・`heat_trigger` ○・`moisture_below_40` は false だが true が必要 × → 非該当」）。"
-    assert example in step4
-    # 規則の文は足さない。差分は例の 1 文だけ
-    assert v20.replace(example, "") == v19
+    old = "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #1 でだけ使う）\n"
+    new = "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #1 の条件。false なら行 #1 は非該当）\n"
+    assert old in v19 and new in v20
+    # キー説明が長いと qwen3 が行を取り違えるため、1 行 110 文字未満を守る
+    assert len(new) < 110
+    # 差分はこの 1 行だけ（手順 4 の例などは足さない）
+    assert v20.replace(new, old) == v19
     # 既定はまだ v19
     assert PROMPT_VERSION == "v19"
