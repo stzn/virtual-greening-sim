@@ -20,6 +20,11 @@ _ANTHROPIC_THINKING: dict[str, dict[str, str]] = {
 }
 
 
+# 思考オフの Ollama の出力トークン数の上限（指定が無いとき）。判断メモ + ツール呼び出し + 最終回答は数百トークンで足りる。
+# ollama の読み取りタイムアウトはチャンクごとで、出力が出続ける限り切れないため、生成が終わらない試行が全体を止めうる（v18 で発生）
+OLLAMA_SAFETY_NUM_PREDICT = 4096
+
+
 def make_chat_model(settings: Settings) -> BaseChatModel:
     if settings.llm_provider == "ollama":
         from langchain_ollama import ChatOllama
@@ -29,7 +34,7 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
             temperature=0,
             base_url=settings.ollama_base_url,
             reasoning=settings.ollama_reasoning,
-            num_predict=settings.ollama_num_predict,
+            num_predict=_ollama_num_predict(settings),
             client_kwargs=(
                 {"timeout": settings.ollama_timeout_s} if settings.ollama_timeout_s else {}
             ),
@@ -57,3 +62,10 @@ def make_chat_model(settings: Settings) -> BaseChatModel:
         timeout=None,
         stop=None,
     )
+
+
+def _ollama_num_predict(settings: Settings) -> int | None:
+    """明示の指定を優先。無ければ、思考オフのときだけ安全上限を付ける（思考モードは長い出力が正常なので制限しない）。"""
+    if settings.ollama_num_predict is not None:
+        return settings.ollama_num_predict
+    return None if settings.ollama_reasoning else OLLAMA_SAFETY_NUM_PREDICT

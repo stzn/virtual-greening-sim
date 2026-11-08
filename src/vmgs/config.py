@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # 思考の長さの制限（None は制限なし）。Anthropic は effort、Ollama は出力トークン数の上限（思考の途中で切れうる）
     anthropic_effort: Literal["low", "medium", "high"] | None = None
-    ollama_num_predict: int | None = None
+    ollama_num_predict: int | None = None  # 未指定の思考オフは agent/llm.py の安全上限
 
     # LangSmith（外部サービスへ送信する。既定はオフ。obs/tracing.py で解決する）
     langsmith_tracing: bool = False
