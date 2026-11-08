@@ -508,13 +508,14 @@ SYSTEM_PROMPT_V19 = SYSTEM_PROMPT_V17.replace(_V19_EXAMPLE_ANCHOR, _V19_EXAMPLE_
 # v19 でも qwen3 は「日射だけが強い歩道C・水分適正（気温 31・日射 900・水分 60）」で正解 4/10。判断メモに
 # `moisture_below_40 false` と書きながら行 #1 を「該当」と結論し、B へ移動する。行 #1 は true を要求するキーと false を
 # 要求するキー（battery_below_15）が混在し、観測値を並べるだけで要求値と照合していない（かつ の取りこぼし）。
-# v20 は規則を足さず、手順 4 に行 #1 の形の例を 1 つ足す（repro 対象 10 回: v19 4/10、本案 10/10、回帰 15/15）。
-_V20_ADDED = "（例: 「#1: 日向 ○・`heat_trigger` ○・`moisture_below_40` は false だが true が必要 × → 非該当」）。"
-_V20_ANCHOR = (
-    "（例: 「#3: C ○・気温 ○・水分 ○・タンク ○・`rain_leaves_dry` が false × → 非該当」）。"
-)
-assert _V20_ANCHOR in SYSTEM_PROMPT_V19
-SYSTEM_PROMPT_V20 = SYSTEM_PROMPT_V19.replace(_V20_ANCHOR, _V20_ANCHOR + _V20_ADDED)
+# repro（対象 10 回、回帰 A・水分 35 で B へ 5 回、A・水分 15 晴天で散水かつ再確認なし 5 回）:
+#   v19 4/10・（5/5）・4/5。手順 4 に行 #1 の形の例を足す案: 10/10・5/5・2/5（再確認なしが悪化し、全評価でも
+#   「行動する状況でも最終回答は JSON」が 2/5 に落ちたため不採用）。
+#   `moisture_below_40` の説明に行 #1 の条件と非該当を添える案（v20）: 10/10・5/5・4/5。説明は 110 文字未満のまま。
+_V20_OLD = "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #1 でだけ使う）\n"
+_V20_NEW = "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #1 の条件。false なら行 #1 は非該当）\n"
+assert _V20_OLD in SYSTEM_PROMPT_V19
+SYSTEM_PROMPT_V20 = SYSTEM_PROMPT_V19.replace(_V20_OLD, _V20_NEW)
 
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 PROMPT_REQUIRES_COND_OBS = frozenset(
