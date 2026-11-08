@@ -505,9 +505,20 @@ _V19_ADDED = (
 assert _V19_EXAMPLE_ANCHOR in SYSTEM_PROMPT_V17
 SYSTEM_PROMPT_V19 = SYSTEM_PROMPT_V17.replace(_V19_EXAMPLE_ANCHOR, _V19_EXAMPLE_ANCHOR + _V19_ADDED)
 
+# v19 でも qwen3 は「日射だけが強い歩道C・水分適正（気温 31・日射 900・水分 60）」で正解 4/10。判断メモに
+# `moisture_below_40 false` と書きながら行 #1 を「該当」と結論し、B へ移動する。行 #1 は true を要求するキーと false を
+# 要求するキー（battery_below_15）が混在し、観測値を並べるだけで要求値と照合していない（かつ の取りこぼし）。
+# v20 は規則を足さず、手順 4 に行 #1 の形の例を 1 つ足す（repro 対象 10 回: v19 4/10、本案 10/10、回帰 15/15）。
+_V20_ADDED = "（例: 「#1: 日向 ○・`heat_trigger` ○・`moisture_below_40` は false だが true が必要 × → 非該当」）。"
+_V20_ANCHOR = (
+    "（例: 「#3: C ○・気温 ○・水分 ○・タンク ○・`rain_leaves_dry` が false × → 非該当」）。"
+)
+assert _V20_ANCHOR in SYSTEM_PROMPT_V19
+SYSTEM_PROMPT_V20 = SYSTEM_PROMPT_V19.replace(_V20_ANCHOR, _V20_ANCHOR + _V20_ADDED)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 PROMPT_REQUIRES_COND_OBS = frozenset(
-    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"}
+    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20"}
 )
 
 
@@ -666,6 +677,7 @@ PROMPTS: dict[str, str] = {
     "v17": SYSTEM_PROMPT_V17,
     "v18": SYSTEM_PROMPT_V18,
     "v19": SYSTEM_PROMPT_V19,
+    "v20": SYSTEM_PROMPT_V20,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
