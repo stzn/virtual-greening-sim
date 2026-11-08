@@ -158,7 +158,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
     assert PROMPT_REQUIRES_COND_OBS == frozenset(
-        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"}
+        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20"}
     )
     assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
@@ -360,7 +360,7 @@ def test_プロンプトv18は判断メモの手順に_1つでも_なら非該�
     assert v18.replace(added, "") == v17
     # チェックリストとキー一覧は v17 と同じ
     assert v18.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
-    # 既定はまだ v17
+    # 既定は v19（v20 は評価のあとに切り替えるか決める）
     assert PROMPT_VERSION == "v19"
 
 
@@ -381,5 +381,19 @@ def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1�
     assert v19.replace(added, "") == v17
     # チェックリストとキー一覧は v17 と同じ
     assert v19.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
-    # 既定はまだ v17
+    # 既定は v19（v20 は評価のあとに切り替えるか決める）
+    assert PROMPT_VERSION == "v19"
+
+
+def test_プロンプトv20は判断メモの手順に_真偽が混在する行の非該当の例を足し_他はv19と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v19, v20 = PROMPTS["v19"], PROMPTS["v20"]
+    assert v20 != v19 and "v20" in PROMPT_REQUIRES_COND_OBS
+    step4 = v20.split("4. 判断メモを書く。")[1].split("5. ")[0]
+    example = "（例: 「#1: 日向 ○・`heat_trigger` ○・`moisture_below_40` は false だが true が必要 × → 非該当」）。"
+    assert example in step4
+    # 規則の文は足さない。差分は例の 1 文だけ
+    assert v20.replace(example, "") == v19
+    # 既定はまだ v19
     assert PROMPT_VERSION == "v19"
