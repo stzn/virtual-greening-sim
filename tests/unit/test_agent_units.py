@@ -107,7 +107,7 @@ def test_summarize_executed_は成功した行動だけを順に要約する() -
 def test_プロンプトv9は最終回答のJSONを必須にし_メモのあとに付ける形を示す() -> None:
     from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS
 
-    assert PROMPT_VERSION == "v17"
+    assert PROMPT_VERSION == "v19"
     assert "必ず1つ" in PROMPTS["v9"]
     assert "必ず1つ" not in PROMPTS["v8"]
     assert "次のJSONだけを返す" not in PROMPTS["v9"]
@@ -145,8 +145,8 @@ def test_プロンプトv10はv9の最終回答の形式と例を引き継ぎ_�
     assert PROMPTS["v10"] != PROMPTS["v9"]
     assert "例（何もしない場合の最終回答）" in PROMPTS["v10"]
     assert "## 最終回答の形式" in PROMPTS["v10"]
-    assert PROMPT_VERSION == "v17"
-    assert SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19"
+    assert SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_プロンプトv11は条件の判定キーを説明し_条件欄がそのキーを指す() -> None:
@@ -160,7 +160,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
     assert PROMPT_REQUIRES_COND_OBS == frozenset(
         {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19"}
     )
-    assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_プロンプトv11は判定を行動の指示でなく事実だと明記しv9の最終回答の形式を引き継ぐ() -> None:
@@ -202,7 +202,7 @@ def test_プロンプトv14は行3の数値条件をキーで指し_他の行は
         assert [r for r in v14.splitlines() if r.startswith(prefix)] == [
             r for r in v13.splitlines() if r.startswith(prefix)
         ]
-    assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_プロンプトv15は雨の禁止を雨だけで水分が足りるかのキーで指し_他はv13のまま() -> None:
@@ -230,7 +230,7 @@ def test_プロンプトv15は雨の禁止を雨だけで水分が足りるか�
         assert [r for r in v15.splitlines() if r.startswith(prefix)] == [
             r for r in v13.splitlines() if r.startswith(prefix)
         ]
-    assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_プロンプトv15を選んだ構成は条件観測を有効にする() -> None:
@@ -257,7 +257,7 @@ def test_プロンプトv13は雨を表から外した禁止ルールにし_日�
     assert "#4: 土壌水分55%" in v13 and "#4 に該当（水分55%・健康度100）" in v13
     assert "#5 に該当（水分55%" not in v13
     assert "moisture_band" not in v13
-    assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_プロンプトv12は水分を真偽値のキーで指し_帯を使わない() -> None:
@@ -281,7 +281,7 @@ def test_プロンプトv12は水分を真偽値のキーで指し_帯を使わ�
     assert "土壌水分 50〜70%" in v12  # #4 は現在値のまま
     assert "事実の判定で、行動の指示ではない" in v12
     assert "## 最終回答の形式" in v12 and "例（何もしない場合の最終回答）" in v12
-    assert PROMPT_VERSION == "v17" and SYSTEM_PROMPT == PROMPTS["v17"]
+    assert PROMPT_VERSION == "v19" and SYSTEM_PROMPT == PROMPTS["v19"]
 
 
 def test_SimConfigの条件観測は既定でオフ() -> None:
@@ -324,7 +324,7 @@ def test_プロンプトv16は雨の条件を全てtrueで満たす向きのキ�
             r for r in v13.splitlines() if r.startswith(prefix)
         ]
     # 既定は v17
-    assert PROMPT_VERSION == "v17"
+    assert PROMPT_VERSION == "v19"
 
 
 def test_プロンプトv17は水分キーの使う行を説明に添え_他はv16と同じ() -> None:
@@ -343,7 +343,7 @@ def test_プロンプトv17は水分キーの使う行を説明に添え_他はv
     ]
     assert v17.split("## 判断チェックリスト")[1] == v16.split("## 判断チェックリスト")[1]
     # 既定は v17
-    assert PROMPT_VERSION == "v17"
+    assert PROMPT_VERSION == "v19"
 
 
 def test_プロンプトv18は判断メモの手順に_1つでも_なら非該当_を足し_他はv17と同じ() -> None:
@@ -361,7 +361,7 @@ def test_プロンプトv18は判断メモの手順に_1つでも_なら非該�
     # チェックリストとキー一覧は v17 と同じ
     assert v18.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
     # 既定はまだ v17
-    assert PROMPT_VERSION == "v17"
+    assert PROMPT_VERSION == "v19"
 
 
 def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1つが罰点なら非該当_の例を足し_他はv17と同じ() -> (
@@ -382,4 +382,4 @@ def test_プロンプトv19は判断メモの手順に_5つ中4つが丸でも1�
     # チェックリストとキー一覧は v17 と同じ
     assert v19.split("## 判断チェックリスト")[1] == v17.split("## 判断チェックリスト")[1]
     # 既定はまだ v17
-    assert PROMPT_VERSION == "v17"
+    assert PROMPT_VERSION == "v19"

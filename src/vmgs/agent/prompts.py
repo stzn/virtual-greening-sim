@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from vmgs.world.params import Params
 
-PROMPT_VERSION = "v17"
+PROMPT_VERSION = "v19"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -645,7 +645,7 @@ SYSTEM_PROMPT_EARLY = build_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY = build_plan_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY_MOVE = build_plan_early_move_prompt()
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V17
+SYSTEM_PROMPT = SYSTEM_PROMPT_V19
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
