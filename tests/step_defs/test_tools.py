@@ -172,6 +172,12 @@ def _error_message_has(ctx: Ctx, a: str, b: str) -> None:
     assert a in message and b in message, message
 
 
+@then(parsers.parse('エラーのメッセージに "{text}" は含まれない'))
+def _error_message_lacks(ctx: Ctx, text: str) -> None:
+    message = ctx.result["error"]["message"]
+    assert text not in message, message
+
+
 @then(parsers.parse('エラーのメッセージは "{prefix}" で始まる'))
 def _error_message_starts(ctx: Ctx, prefix: str) -> None:
     assert ctx.result["error"]["message"].startswith(prefix), ctx.result
