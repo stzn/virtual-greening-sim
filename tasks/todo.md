@@ -105,4 +105,4 @@
 - [x] 既定を v19 に切替
 - [x] 評価シナリオを 10 件追加（conjunction.feature、計 41 件）。v19: Haiku 41/41、qwen3 40/41
 - [x] qwen3 の未達（日射だけの猛暑で B へ誤移動）は v20 で解消。v20: qwen3 41/41・Haiku 41/41（docs/eval-results.md）
-- [x] 既定を v20 に切替（24 時間通しは未取得）
+- [x] 既定を v20 に切替（24 時間通しも v19 と同等、退行なし。docs/eval-results.md）
