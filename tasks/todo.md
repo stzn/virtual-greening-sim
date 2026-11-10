@@ -107,3 +107,4 @@
 - [x] qwen3 の未達（日射だけの猛暑で B へ誤移動）は v20 で解消。v20: qwen3 41/41・Haiku 41/41（docs/eval-results.md）
 - [x] 既定を v20 に切替（24 時間通しも v19 と同等、退行なし。docs/eval-results.md）
 - [x] Sonnet 5.5 の全評価（v20）: 41/41（docs/eval-results.md）
+- [x] 空のタンクでの irrigate(0) のエラー文を修正（ツール側のみ。533 テスト緑。効果は未測定）

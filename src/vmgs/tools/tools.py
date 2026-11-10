@@ -43,6 +43,13 @@ IRRIGATE_MIN_HINT = (
 )
 
 
+# タンクが空のときは「50 を指定すれば残量まで散水できる」は誤り（50 でも INSUFFICIENT_WATER になる）。
+# 空のタンクで 0ml を要求した失敗のあと「散水した（0ml）」と要約する例があったため、空だと伝える。
+IRRIGATE_EMPTY_HINT = (
+    "タンクが空なので散水できません。この時間は散水せず、ほかの行動の要否を判断してください"
+)
+
+
 def _below_irrigate_min(name: str, errors: list[Any]) -> bool:
     return name == "irrigate" and any(
         e["loc"] == ("amount_ml",) and e["type"] == "greater_than_equal" for e in errors
@@ -122,7 +129,8 @@ class ToolBox:
             errors = e.errors(include_url=False, include_context=False, include_input=False)
             message = "引数が不正です"
             if _below_irrigate_min(name, errors):
-                message += f"。{IRRIGATE_MIN_HINT}"
+                tank_empty = self.world.plant.water_tank_ml <= 0
+                message += f"。{IRRIGATE_EMPTY_HINT if tank_empty else IRRIGATE_MIN_HINT}"
             return _error("VALIDATION_ERROR", message, errors=errors)
         try:
             return {"ok": True, **spec.handler(args)}
