@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from vmgs.world.params import Params
 
-PROMPT_VERSION = "v20"
+PROMPT_VERSION = "v21"
 
 SYSTEM_PROMPT_V1 = """\
 あなたは移動緑化ユニットの自律制御AIである。
@@ -517,9 +517,20 @@ _V20_NEW = "- `moisture_below_40`: 土壌水分が 40% 未満なら true（行 #
 assert _V20_OLD in SYSTEM_PROMPT_V19
 SYSTEM_PROMPT_V20 = SYSTEM_PROMPT_V19.replace(_V20_OLD, _V20_NEW)
 
+# v20 の Haiku は「降水確率 59%・降水量 0.7mm」の C・水分適正・猛暑（rain_leaves_dry は true）で、境界の評価が 1/5・1/5。
+# 判断メモに「観測と予報が食い違う」と書き、get_weather の生の予報（59%・0.7mm）を見て散水を見送る
+# （qwen3 は 5/5）。`rain_leaves_dry` の説明に、閾値未満の予報は雨とみなさず観測キーに従う旨を添える（v21）。
+_V21_OLD = "- `rain_leaves_dry`: 雨が降らない、または予報の雨だけでは土壌水分が 30% に届かないなら true（雨が散水の代わりにならない）\n"
+_V21_NEW = (
+    "- `rain_leaves_dry`: 雨が降らない、または予報の雨だけでは土壌水分が 30% に届かないなら true（雨が散水の代わりにならない）。"
+    "降水確率 60% 未満かつ降水量 1mm 未満の予報は雨とみなさないので true。予報の数値が閾値のすぐ下でも、このキーに従う\n"
+)
+assert _V21_OLD in SYSTEM_PROMPT_V20
+SYSTEM_PROMPT_V21 = SYSTEM_PROMPT_V20.replace(_V21_OLD, _V21_NEW)
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 PROMPT_REQUIRES_COND_OBS = frozenset(
-    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20"}
+    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21"}
 )
 
 
@@ -657,7 +668,7 @@ SYSTEM_PROMPT_EARLY = build_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY = build_plan_early_prompt()
 SYSTEM_PROMPT_PLAN_EARLY_MOVE = build_plan_early_move_prompt()
 
-SYSTEM_PROMPT = SYSTEM_PROMPT_V20
+SYSTEM_PROMPT = SYSTEM_PROMPT_V21
 PROMPTS: dict[str, str] = {
     "v1": SYSTEM_PROMPT_V1,
     "v2": SYSTEM_PROMPT_V2,
@@ -679,6 +690,7 @@ PROMPTS: dict[str, str] = {
     "v18": SYSTEM_PROMPT_V18,
     "v19": SYSTEM_PROMPT_V19,
     "v20": SYSTEM_PROMPT_V20,
+    "v21": SYSTEM_PROMPT_V21,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
