@@ -109,4 +109,4 @@
 - [x] Sonnet 5.5 の全評価（v20）: 41/41（docs/eval-results.md）
 - [x] 空のタンクでの irrigate(0) のエラー文を修正（ツール側のみ。533 テスト緑。効果は未測定）
 - [x] 境界値の評価 10 件を追加（boundary.feature、全 51 件）: qwen3 10/10、Haiku 9/10（降水確率 59% の暑熱緩和で不安定。観測キーより生の予報を優先）。docs/eval-results.md
-- [x] 既定を v21 に切替（Haiku の降水確率 59% の取りこぼしを `rain_leaves_dry` の説明 1 文で解消: 再現 0/8→8/8、全 51 件 Haiku・qwen3 とも通過）。docs/eval-results.md
+- [x] 既定を v21 に切替（Haiku の降水確率 59% の取りこぼしを `rain_leaves_dry` の説明 1 文で解消: 再現 0/8→8/8、全 51 件 Haiku・qwen3・Sonnet 5.5 とも通過）。docs/eval-results.md
