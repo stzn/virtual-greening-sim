@@ -1,5 +1,7 @@
 # 評価結果ログ（LLM判断品質シナリオ）
 
+> 全体の経緯と結論は [prompt-history.md](prompt-history.md)（チェックリスト読解）と [research-summary.md](research-summary.md)（資源配分）にまとめた。ここは時系列の記録。
+
 実行: `uv run pytest evals -m eval`（各シナリオ5回試行、基準は4回以上）。生データは `runs/evals/*.json`（gitignore）。
 モデル: Ollama `qwen3:14b`（思考オフ, temperature=0）。
 

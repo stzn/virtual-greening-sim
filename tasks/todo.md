@@ -111,3 +111,4 @@
 - [x] 境界値の評価 10 件を追加（boundary.feature、全 51 件）: qwen3 10/10、Haiku 9/10（降水確率 59% の暑熱緩和で不安定。観測キーより生の予報を優先）。docs/eval-results.md
 - [x] 既定を v21 に切替（Haiku の降水確率 59% の取りこぼしを `rain_leaves_dry` の説明 1 文で解消: 再現 0/8→8/8、全 51 件 Haiku・qwen3・Sonnet 5.5 とも通過）。docs/eval-results.md
 - [x] v21 の24時間通し（qwen3、5 バリアント）: v20 と同一（74.0 / 66.6 / 92.6）、退行なし
+- [x] チェックリスト読解の成果の整理: docs/prompt-history.md（v1〜v21 の経緯・到達点・分かったこと）
