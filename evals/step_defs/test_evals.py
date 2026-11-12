@@ -46,6 +46,7 @@ for _name in (
     "conflict",
     "conjunction",
     "boundary",
+    "combo",
 ):
     scenarios(str(FEATURES / f"{_name}.feature"))
 
