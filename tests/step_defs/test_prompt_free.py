@@ -149,7 +149,7 @@ def _t_example(pc: PromptCtx) -> None:
 
 @then(parsers.parse('既定のプロンプトは "{name}" ではない'))
 def _t_default(name: str) -> None:
-    assert SYSTEM_PROMPT != PROMPTS[name]
+    assert PROMPTS[name] != SYSTEM_PROMPT
 
 
 @then(parsers.parse('プロンプト名 "{name}" は選択肢に含まれる'))

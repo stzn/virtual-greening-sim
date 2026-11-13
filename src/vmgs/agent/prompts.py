@@ -1,5 +1,7 @@
 """システムプロンプトとターン入力。プロンプトはバージョン管理し、評価シナリオで改善を測る。"""
 
+import re
+
 from pydantic import BaseModel
 
 from vmgs.world.params import Params
@@ -544,9 +546,8 @@ _j = _v22.index("\n", _i) + 1
 SYSTEM_PROMPT_V22 = _v22[:_j] + _V22_KEY + _v22[_j:]
 
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
-PROMPT_REQUIRES_COND_OBS = frozenset(
-    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22"}
-)
+# 条件観測を要する版: v11 以降の番号付きの版（PROMPTS の定義後に導出する。版を足しても更新は要らない）
+COND_OBS_FIRST_VERSION = 11
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -601,6 +602,11 @@ JSONは1つだけで、コードブロックは使わない:
 """
 
 
+def _with_hints(hints: str, params: Params | None = None) -> str:
+    """free に、ヒントの節を【進め方】の前へ差し込む（hybrid 系の共通処理）。"""
+    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+
+
 # 資源計画のヒント。判断の閾値・具体的な量は与えず、考え方だけを伝える（数字を含めない。テストで検証する）。
 # free は、水が少ない状況で夜に水を使い切り、最も暑い時間に散水が INSUFFICIENT_WATER で失敗し、
 # 猛暑の日向から退避しなかった。そのときの失敗に対応する考え方だけを足す。
@@ -617,7 +623,7 @@ PLANNING_HINTS = """\
 
 def build_hybrid_prompt(params: Params | None = None) -> str:
     """free に、資源計画のヒント（考え方のみ）を足したプロンプト。差分はヒントだけ。"""
-    return build_free_prompt(params).replace("【進め方】", PLANNING_HINTS + "【進め方】", 1)
+    return _with_hints(PLANNING_HINTS, params)
 
 
 # 計画観測（get_plant_state が返す、残り時間と残り時間あたりの水・電池）の説明。数字・閾値は含めない。
@@ -635,8 +641,7 @@ PROMPT_REQUIRES_PLAN_OBS = frozenset({"plan", "plan_early", "plan_early_move"})
 
 def build_plan_prompt(params: Params | None = None) -> str:
     """hybrid に、計画観測の説明を1文だけ足したプロンプト。差分はその1文だけ。"""
-    hints = PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + "\n"
-    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+    return _with_hints(PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + "\n", params)
 
 
 # 退避の先読みの説明。思考オンの hybrid が猛暑の前に退避して改善した（思考オフは退避が遅い）。
@@ -649,14 +654,14 @@ EARLY_RETREAT_HINT = (
 
 def build_early_prompt(params: Params | None = None) -> str:
     """hybrid に、退避の先読みの説明を1文だけ足したプロンプト。差分はその1文だけ。"""
-    hints = PLANNING_HINTS[:-1] + EARLY_RETREAT_HINT + "\n"
-    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+    return _with_hints(PLANNING_HINTS[:-1] + EARLY_RETREAT_HINT + "\n", params)
 
 
 def build_plan_early_prompt(params: Params | None = None) -> str:
     """plan に、退避の先読みの説明を1文だけ足したプロンプト。差分はその1文だけ。"""
-    hints = PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + EARLY_RETREAT_HINT + "\n"
-    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+    return _with_hints(
+        PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + EARLY_RETREAT_HINT + "\n", params
+    )
 
 
 # 移動の説明。思考オフの Haiku は、退避の先読みの一文があっても、移動（回数・バッテリー）を温存する資源として扱い、
@@ -673,7 +678,7 @@ def build_plan_early_move_prompt(params: Params | None = None) -> str:
     hints = (
         PLANNING_HINTS[:-1] + PLAN_OBSERVATION_HINT + EARLY_RETREAT_HINT + MOVE_FIRST_HINT + "\n"
     )
-    return build_free_prompt(params).replace("【進め方】", hints + "【進め方】", 1)
+    return _with_hints(hints, params)
 
 
 SYSTEM_PROMPT_FREE = build_free_prompt()
@@ -714,6 +719,12 @@ PROMPTS: dict[str, str] = {
     "plan_early": SYSTEM_PROMPT_PLAN_EARLY,  # plan + 退避の先読みの説明（計画観測を有効にする）
     "plan_early_move": SYSTEM_PROMPT_PLAN_EARLY_MOVE,  # plan_early + 移動は温存しない説明（計画観測を有効にする）
 }
+
+PROMPT_REQUIRES_COND_OBS = frozenset(
+    name
+    for name in PROMPTS
+    if re.fullmatch(r"v\d+", name) and int(name[1:]) >= COND_OBS_FIRST_VERSION
+)
 
 
 class TurnSummary(BaseModel):
