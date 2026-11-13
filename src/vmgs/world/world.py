@@ -229,6 +229,7 @@ class World:
             "moisture_50_to_70": MOISTURE_HEAT_RELIEF[0] <= moisture <= MOISTURE_HEAT_RELIEF[1],
             "tank_at_least_4000": self.plant.water_tank_ml >= TANK_HEAT_RELIEF_ML,
             "rain_leaves_dry": not rain_covers,
+            "return_to_b_blocked": self._return_to_b_blocked(),
         }
 
     # --- 時間経過 ---
@@ -311,6 +312,14 @@ class World:
             moves_in_window=len(recent),
             move_budget_max=params.move_budget_max,
         )
+
+    def _return_to_b_blocked(self) -> bool:
+        """B へ移動すると往復として拒否される状況か（_guard_reversal と同じ条件。移動先は B 固定）。"""
+        p, params = self.plant, self.params
+        last = p.last_move
+        if last is None or last.from_spot != "B" or p.health < params.reversal_emergency_health:
+            return False
+        return self._hours_since(last.at) < params.reversal_cooldown_hours
 
     def _guard_reversal(self, target: str) -> None:
         """直前の移動元へ短時間で戻る往復を拒否する（健康度が低い緊急時は許可）。"""

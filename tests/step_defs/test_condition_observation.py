@@ -27,6 +27,7 @@ OBS_KEYS = (
     "moisture_50_to_70",
     "tank_at_least_4000",
     "rain_leaves_dry",
+    "return_to_b_blocked",
 )
 
 
@@ -109,7 +110,7 @@ def _t_same(ctx: Ctx, cc: CondCtx) -> None:
     "条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・"
     "moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・"
     "temp_at_least_33・moisture_50_to_70・tank_at_least_4000・"
-    "rain_leaves_dry の12個だけである"
+    "rain_leaves_dry・return_to_b_blocked の13個だけである"
 )
 def _t_only_seven(ctx: Ctx, cc: CondCtx) -> None:
     ctx.world.condition_observations_enabled = False

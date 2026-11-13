@@ -158,7 +158,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
         assert key not in PROMPTS["v9"]
     assert "| 1 | `rain_within_3h` が true |" in v11
     assert PROMPT_REQUIRES_COND_OBS == frozenset(
-        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21"}
+        {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22"}
     )
     assert PROMPT_VERSION == "v21" and SYSTEM_PROMPT == PROMPTS["v21"]
 
@@ -413,3 +413,17 @@ def test_プロンプトv21は_rain_leaves_dry_の説明に閾値未満の予報
     # 差分はこの 1 文だけ
     assert v21.replace("。" + added + "予報の数値が閾値のすぐ下でも、このキーに従う", "") == v20
     assert PROMPT_VERSION == "v21"
+
+
+def test_プロンプトv22は行1に往復のキーを足し_キー一覧に1行足すだけでv21と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPT_VERSION, PROMPTS
+
+    v21, v22 = PROMPTS["v21"], PROMPTS["v22"]
+    assert v22 != v21 and "v22" in PROMPT_REQUIRES_COND_OBS
+    row = "、かつ `return_to_b_blocked` が false |"
+    key = "- `return_to_b_blocked`: 直前に B から移動して 2 時間未満（B へ戻る往復）なら true（行 #1 の条件。true なら行 #1 は非該当）\n"
+    assert row in v22 and key in v22 and row not in v21
+    # 差分はこの 2 箇所だけ
+    assert v22.replace(key, "").replace(row, " |") == v21
+    # 既定の版はこの版に依存しない（評価で確認するまで切り替えない）
+    assert PROMPT_VERSION in {"v21", "v22"}

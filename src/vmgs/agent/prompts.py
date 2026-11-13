@@ -528,9 +528,24 @@ _V21_NEW = (
 assert _V21_OLD in SYSTEM_PROMPT_V20
 SYSTEM_PROMPT_V21 = SYSTEM_PROMPT_V20.replace(_V21_OLD, _V21_NEW)
 
+# v21 の qwen3 は「B から A へ移動した 1 時間後の猛暑・乾燥（A）」で 0/5。5 回とも行 #1 に従って B へ移動を試み、
+# 往復で拒否されてから散水に切り替えた（追加ルールの往復禁止は別欄にあり、行 #1 の条件に入っていなかった）。
+# 行 #1 の条件に「last_move の from が B で hours_ago が 2 未満、ではない」と文章で足した案は 0/8 のまま悪化
+# （判断メモが「hours_ago 1 ≥2 → 該当」と比較を誤り、二重否定の複合条件を評価できない）。
+# 世界側で往復の可否を真偽値のキー（return_to_b_blocked）にして渡し、行 #1 の条件に「false」で足す（v22）。
+_V22_ROW_OLD = "かつ **move_budget_remaining が 1 以上** |"
+_V22_ROW_NEW = "かつ **move_budget_remaining が 1 以上**、かつ `return_to_b_blocked` が false |"
+_V22_KEY_ANCHOR = "- `rain_leaves_dry`:"
+_V22_KEY = "- `return_to_b_blocked`: 直前に B から移動して 2 時間未満（B へ戻る往復）なら true（行 #1 の条件。true なら行 #1 は非該当）\n"
+assert SYSTEM_PROMPT_V21.count(_V22_ROW_OLD) == 1 and SYSTEM_PROMPT_V21.count(_V22_KEY_ANCHOR) >= 1
+_v22 = SYSTEM_PROMPT_V21.replace(_V22_ROW_OLD, _V22_ROW_NEW)
+_i = _v22.index(_V22_KEY_ANCHOR)
+_j = _v22.index("\n", _i) + 1
+SYSTEM_PROMPT_V22 = _v22[:_j] + _V22_KEY + _v22[_j:]
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 PROMPT_REQUIRES_COND_OBS = frozenset(
-    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21"}
+    {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22"}
 )
 
 
@@ -691,6 +706,7 @@ PROMPTS: dict[str, str] = {
     "v19": SYSTEM_PROMPT_V19,
     "v20": SYSTEM_PROMPT_V20,
     "v21": SYSTEM_PROMPT_V21,
+    "v22": SYSTEM_PROMPT_V22,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

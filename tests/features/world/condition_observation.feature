@@ -12,7 +12,7 @@
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー は含まれない
 
-  シナリオ: 有効にすると、条件観測のキーが12個返る
+  シナリオ: 有効にすると、条件観測のキーが13個返る
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
     ならば 結果に 条件観測のキー が含まれる
@@ -25,7 +25,7 @@
   シナリオ: 判断基準（行番号・推奨行動）は含まれない
     前提 条件観測が有効である
     もし get_plant_state を呼ぶ
-    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・temp_at_least_33・moisture_50_to_70・tank_at_least_4000・rain_leaves_dry の12個だけである
+    ならば 条件観測のキーは rain_within_3h・heat_trigger・moisture_band・moisture_below_30・moisture_below_40・moisture_above_70・battery_below_15・in_sunlight・temp_at_least_33・moisture_50_to_70・tank_at_least_4000・rain_leaves_dry・return_to_b_blocked の13個だけである
 
   # --- 雨 ---
   シナリオテンプレート: 今後3時間以内の降水確率・降水量で rain_within_3h が決まる
@@ -248,3 +248,31 @@
       | 14.9 | true  |
       | 15   | false |
       | 100  | false |
+
+  # --- 往復（v22。B へ戻る移動が往復として拒否される状況をキーにする。世界のガード _guard_reversal と同じ条件） ---
+  シナリオテンプレート: 直前に B から移動して2時間未満のときだけ return_to_b_blocked は true になる
+    前提 条件観測が有効である
+    かつ <経過>時間前に "<元>" から "<先>" へ移動している
+    もし get_plant_state を呼ぶ
+    ならば return_to_b_blocked は <結果> である
+
+    例:
+      | 経過 | 元 | 先 | 結果  |
+      | 0    | B  | A  | true  |
+      | 1    | B  | A  | true  |
+      | 2    | B  | A  | false |
+      | 3    | B  | A  | false |
+      | 1    | A  | B  | false |
+      | 1    | C  | A  | false |
+
+  シナリオ: 直前の移動が無ければ return_to_b_blocked は false である
+    前提 条件観測が有効である
+    もし get_plant_state を呼ぶ
+    ならば return_to_b_blocked は false である
+
+  シナリオ: 健康度が緊急の水準（50 未満）なら、往復でも return_to_b_blocked は false である
+    前提 条件観測が有効である
+    かつ 1時間前に "B" から "A" へ移動している
+    かつ 健康度は 40 である
+    もし get_plant_state を呼ぶ
+    ならば return_to_b_blocked は false である
