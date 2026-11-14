@@ -51,6 +51,11 @@ def _g_disabled(ctx: Ctx) -> None:
     ctx.world.condition_observations_enabled = False
 
 
+@given("行観測が有効である")
+def _g_row_enabled(ctx: Ctx) -> None:
+    ctx.world.row_observation_enabled = True
+
+
 @given(parsers.parse("現在の気象は 気温 {t:g}℃・日射 {r:g}W/m² である"))
 def _g_weather(ctx: Ctx, t: float, r: float) -> None:
     ctx.weather.temperature_c, ctx.weather.shortwave_w_m2 = float(t), float(r)
@@ -124,3 +129,20 @@ def _t_bool(cc: CondCtx, key: str, value: str) -> None:
         assert cc.result[key] == value.strip('"')
     else:
         assert cc.result[key] is (value == "true")
+
+
+@then("結果に checklist_row は含まれない")
+def _t_row_absent(cc: CondCtx) -> None:
+    assert "checklist_row" not in cc.result
+
+
+@then(parsers.parse("最初に当てはまる行は {n:d} である"))
+def _t_row(cc: CondCtx, n: int) -> None:
+    assert cc.result["checklist_row"] == n
+
+
+@then("行観測を除いた結果は、無効のときの結果と同じである")
+def _t_row_same(ctx: Ctx, cc: CondCtx) -> None:
+    rest = {k: v for k, v in cc.result.items() if k != "checklist_row"}
+    ctx.world.row_observation_enabled = False
+    assert ToolBox(ctx.world).call("get_plant_state") == rest

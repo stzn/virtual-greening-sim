@@ -545,9 +545,24 @@ _i = _v22.index(_V22_KEY_ANCHOR)
 _j = _v22.index("\n", _i) + 1
 SYSTEM_PROMPT_V22 = _v22[:_j] + _V22_KEY + _v22[_j:]
 
+# v23: v21 のキー一覧に checklist_row（世界が表を上から当てはめた行の番号）を 1 行足す。
+# 8b が 5 条件の AND を評価できない問題への試み（表を読むのではなく、世界の計算結果に従わせる）
+_V23_KEY = "- `checklist_row`: 世界が上の表を上から順に当てはめ、最初に当てはまった行の番号（どれにも当てはまらなければ 0）。その行の行動に従う\n"
+_k = SYSTEM_PROMPT_V21.index(_V22_KEY_ANCHOR)
+_m = SYSTEM_PROMPT_V21.index("\n", _k) + 1
+SYSTEM_PROMPT_V23 = SYSTEM_PROMPT_V21[:_m] + _V23_KEY + SYSTEM_PROMPT_V21[_m:]
+
+# 行観測（checklist_row）を要する版。条件観測も要する（PROMPT_REQUIRES_COND_OBS に含まれる）
+PROMPT_REQUIRES_ROW_OBS = frozenset({"v23"})
+
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 # 条件観測を要する版: v11 以降の番号付きの版（PROMPTS の定義後に導出する。版を足しても更新は要らない）
 COND_OBS_FIRST_VERSION = 11
+
+
+def prompt_requires_row_obs(prompt: str | None) -> bool:
+    """行観測（checklist_row）を要するか。指定なし（None）は既定の版で判断する。"""
+    return (prompt or PROMPT_VERSION) in PROMPT_REQUIRES_ROW_OBS
 
 
 def prompt_requires_cond_obs(prompt: str | None) -> bool:
@@ -712,6 +727,7 @@ PROMPTS: dict[str, str] = {
     "v20": SYSTEM_PROMPT_V20,
     "v21": SYSTEM_PROMPT_V21,
     "v22": SYSTEM_PROMPT_V22,
+    "v23": SYSTEM_PROMPT_V23,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

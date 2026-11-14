@@ -104,6 +104,7 @@ class World:
         horizon_end: datetime | None = None,
         planning_observations: bool = False,
         condition_observations: bool = False,
+        row_observation: bool = False,
     ) -> None:
         self.weather = weather
         self.clock = clock
@@ -114,6 +115,8 @@ class World:
         self.planning_observations_enabled = planning_observations
         # 条件観測: チェックリストの条件の真偽（事実のみ。行動は含まない）を返す
         self.condition_observations_enabled = condition_observations
+        # 行観測: 条件観測から、チェックリストで最初に当てはまる行の番号を計算して返す（condition_observations が有効なときのみ）
+        self.row_observation_enabled = row_observation
         self.plant = PlantUnit(
             spot_id=start_spot,
             moisture=self.params.initial_moisture,
@@ -185,7 +188,7 @@ class World:
             "battery_per_remaining_hour_pct": round(p.battery_pct / remaining, 1),
         }
 
-    def condition_observations(self) -> dict[str, bool | str] | None:
+    def condition_observations(self) -> dict[str, bool | str | int] | None:
         """条件観測（現在値と予報から計算した事実の真偽のみ）。無効なら None。
 
         moisture_band の境界は下限を含む（30 ちょうどは "30-40"）。70 ちょうどは "50-70"、">70" は 70 超。
@@ -215,7 +218,7 @@ class World:
             band = next(
                 (name for low, name in MOISTURE_BANDS if moisture >= low), MOISTURE_BAND_LOWEST
             )
-        return {
+        obs: dict[str, bool | str | int] = {
             "rain_within_3h": rain,
             "heat_trigger": w.temperature_c >= HEAT_TEMP_C
             or w.shortwave_w_m2 >= HEAT_SHORTWAVE_W_M2,
@@ -231,6 +234,41 @@ class World:
             "rain_leaves_dry": not rain_covers,
             "return_to_b_blocked": self._return_to_b_blocked(),
         }
+        if self.row_observation_enabled:
+            obs["checklist_row"] = self._checklist_row(obs)
+        return obs
+
+    def _checklist_row(self, obs: dict[str, bool | str | int]) -> int:
+        """チェックリストを上から順に当てはめ、最初に当てはまる行の番号（どれにも当てはまらなければ 0）。
+
+        プロンプトの表（行 #1〜#5）と同じ条件を、条件観測と現在値から計算する。
+        """
+        p = self.plant
+        move_budget = max(0, self.params.move_budget_max - self._moves_in_window())
+        if (
+            obs["in_sunlight"]
+            and obs["heat_trigger"]
+            and obs["moisture_below_40"]
+            and not obs["battery_below_15"]
+            and move_budget >= 1
+            and not obs["return_to_b_blocked"]
+        ):
+            return 1
+        if obs["moisture_below_30"] and obs["rain_leaves_dry"] and p.water_tank_ml >= 50:
+            return 2
+        if (
+            self.spot.id == "C"
+            and obs["temp_at_least_33"]
+            and obs["moisture_50_to_70"]
+            and obs["tank_at_least_4000"]
+            and obs["rain_leaves_dry"]
+        ):
+            return 3
+        if not obs["moisture_below_30"] and not obs["moisture_above_70"] and p.health >= 70:
+            return 4
+        if obs["moisture_above_70"]:
+            return 5
+        return 0
 
     # --- 時間経過 ---
     def advance(self, hours: int = 1) -> None:

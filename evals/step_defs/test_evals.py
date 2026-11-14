@@ -11,7 +11,13 @@ import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from vmgs.agent.prompts import PROMPT_VERSION, PROMPTS, TurnSummary, prompt_requires_cond_obs
+from vmgs.agent.prompts import (
+    PROMPT_VERSION,
+    PROMPTS,
+    TurnSummary,
+    prompt_requires_cond_obs,
+    prompt_requires_row_obs,
+)
 from vmgs.agent.runner import TurnResult
 from vmgs.eval.trials import (
     DEFAULT_TRIALS,
@@ -126,6 +132,7 @@ def _w_run(ec: EvalCtx, eval_model: BaseChatModel) -> None:
         DEFAULT_TRIALS,
         PROMPTS[version],
         condition_observations=prompt_requires_cond_obs(version),
+        row_observation=prompt_requires_row_obs(version),
     )
 
 

@@ -83,13 +83,16 @@ def build_weather(setup: TrialSetup, hours: int = 24) -> SeriesWeather:
     return SeriesWeather(records)
 
 
-def build_world(setup: TrialSetup, condition_observations: bool = False) -> World:
+def build_world(
+    setup: TrialSetup, condition_observations: bool = False, row_observation: bool = False
+) -> World:
     world = World(
         build_weather(setup),
         SimClock(EVAL_START),
         notes_path=Path(tempfile.mkdtemp()) / "notes.md",
         start_spot=setup.spot,
         condition_observations=condition_observations,
+        row_observation=row_observation,
     )
     world.plant.moisture = setup.moisture
     world.plant.water_tank_ml = setup.tank_ml
@@ -146,13 +149,14 @@ def run_trials(
     system_prompt: str = SYSTEM_PROMPT,
     seed: int = 0,
     condition_observations: bool = False,
+    row_observation: bool = False,
 ) -> list[TurnResult]:
     """試行ごとに新しい World・Runner で1ターン判断させる（試行間の影響を排除）。条件は試行ごとに少し揺らす。"""
     results: list[TurnResult] = []
     for i in range(n):
         runner = AgentRunner(
             model,
-            build_world(vary_setup(setup, seed, i), condition_observations),
+            build_world(vary_setup(setup, seed, i), condition_observations, row_observation),
             system_prompt=system_prompt,
         )
         runner.history = list(setup.history)

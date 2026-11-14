@@ -58,6 +58,8 @@ class SimConfig(BaseModel):
     planning_observations: bool = False
     # 条件観測（チェックリストの条件の真偽）を get_plant_state に返す。既定はオフで、オフなら出力は変わらない
     condition_observations: bool = False
+    # 行観測（チェックリストで最初に当てはまる行の番号）を返す。条件観測が有効なときのみ意味を持つ。既定はオフ
+    row_observation: bool = False
     # 残量を超える散水を残量までに切り詰める。False なら INSUFFICIENT_WATER で拒否（切り詰め導入前の挙動）
     truncate_irrigation: bool = True
 
@@ -96,6 +98,7 @@ def _build_world(config: SimConfig, weather: SeriesWeather, store: RunStore) -> 
         horizon_end=config.start_time + timedelta(hours=config.hours),
         planning_observations=config.planning_observations,
         condition_observations=config.condition_observations,
+        row_observation=config.row_observation,
         params=Params(truncate_irrigation=config.truncate_irrigation),
     )
     p = world.plant

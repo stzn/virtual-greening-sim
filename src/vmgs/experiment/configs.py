@@ -3,7 +3,11 @@
 import re
 from dataclasses import dataclass
 
-from vmgs.agent.prompts import PROMPT_REQUIRES_PLAN_OBS, prompt_requires_cond_obs
+from vmgs.agent.prompts import (
+    PROMPT_REQUIRES_PLAN_OBS,
+    prompt_requires_cond_obs,
+    prompt_requires_row_obs,
+)
 
 PROVIDERS = {"openai", "anthropic", "ollama"}
 _PROMPT = re.compile(
@@ -32,6 +36,11 @@ class ConfigSpec:
     def condition_observations(self) -> bool:
         """このプロンプトは世界側の条件観測を要する（条件観測を要する版を選んだ構成、または指定なしで既定がそうなら有効にする）。"""
         return self.kind == "llm" and prompt_requires_cond_obs(self.prompt)
+
+    @property
+    def row_observation(self) -> bool:
+        """このプロンプトは世界側の行観測（checklist_row）を要する。"""
+        return self.kind == "llm" and prompt_requires_row_obs(self.prompt)
 
     @property
     def name(self) -> str:

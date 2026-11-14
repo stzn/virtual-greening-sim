@@ -173,9 +173,9 @@ def test_run_trials_は試行ごとに揺らした条件で世界を作る(monke
     seen: list[float] = []
     real = build_world
 
-    def spy(setup: TrialSetup, condition_observations: bool = False):  # type: ignore[no-untyped-def]
+    def spy(setup: TrialSetup, condition_observations: bool = False, row_observation: bool = False):  # type: ignore[no-untyped-def]
         seen.append(setup.battery_pct)
-        return real(setup, condition_observations)
+        return real(setup, condition_observations, row_observation)
 
     monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
     model = ScriptedChatModel(responses=[AIMessage(content="維持")])  # 最後の応答を繰り返す
@@ -192,14 +192,34 @@ def test_run_trials_は条件観測の指定を世界へ渡す(monkeypatch: pyte
     flags: list[bool] = []
     real = build_world
 
-    def spy(setup: TrialSetup, condition_observations: bool = False):  # type: ignore[no-untyped-def]
+    def spy(setup: TrialSetup, condition_observations: bool = False, row_observation: bool = False):  # type: ignore[no-untyped-def]
         flags.append(condition_observations)
-        return real(setup, condition_observations)
+        return real(setup, condition_observations, row_observation)
 
     monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
     model = ScriptedChatModel(responses=[AIMessage(content="維持")])
     run_trials(model, TrialSetup(), n=2)
     run_trials(model, TrialSetup(), n=2, condition_observations=True)
+    assert flags == [False, False, True, True]
+
+
+def test_build_world_は行観測を既定で無効にし_指定で有効にする() -> None:
+    assert build_world(TrialSetup()).row_observation_enabled is False
+    assert build_world(TrialSetup(), True, True).row_observation_enabled is True
+
+
+def test_run_trials_は行観測の指定を世界へ渡す(monkeypatch: pytest.MonkeyPatch) -> None:
+    flags: list[bool] = []
+    real = build_world
+
+    def spy(setup: TrialSetup, condition_observations: bool = False, row_observation: bool = False):  # type: ignore[no-untyped-def]
+        flags.append(row_observation)
+        return real(setup, condition_observations, row_observation)
+
+    monkeypatch.setattr("vmgs.eval.trials.build_world", spy)
+    model = ScriptedChatModel(responses=[AIMessage(content="維持")])
+    run_trials(model, TrialSetup(), n=2, condition_observations=True)
+    run_trials(model, TrialSetup(), n=2, condition_observations=True, row_observation=True)
     assert flags == [False, False, True, True]
 
 

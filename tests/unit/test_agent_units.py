@@ -159,7 +159,21 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
     assert "| 1 | `rain_within_3h` が true |" in v11
     assert (
         frozenset(
-            {"v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22"}
+            {
+                "v11",
+                "v12",
+                "v13",
+                "v14",
+                "v15",
+                "v16",
+                "v17",
+                "v18",
+                "v19",
+                "v20",
+                "v21",
+                "v22",
+                "v23",
+            }
         )
         == PROMPT_REQUIRES_COND_OBS
     )
@@ -430,3 +444,27 @@ def test_プロンプトv22は行1に往復のキーを足し_キー一覧に1�
     assert v22.replace(key, "").replace(row, " |") == v21
     # 既定の版はこの版に依存しない（評価で確認するまで切り替えない）
     assert PROMPT_VERSION in {"v21", "v22"}
+
+
+def test_プロンプトv23はキー一覧に_checklist_row_を1行足すだけでv21と同じ() -> None:
+    from vmgs.agent.prompts import (
+        PROMPT_REQUIRES_COND_OBS,
+        PROMPT_VERSION,
+        PROMPTS,
+        prompt_requires_row_obs,
+    )
+
+    v21, v23 = PROMPTS["v21"], PROMPTS["v23"]
+    key = "- `checklist_row`: 世界が上の表を上から順に当てはめ、最初に当てはまった行の番号（どれにも当てはまらなければ 0）。その行の行動に従う\n"
+    assert key in v23 and key not in v21
+    # 差分はこの 1 行だけ
+    assert v23.replace(key, "") == v21
+    # 条件観測も要する。行観測を要するのは v23 だけ（他の版の世界は変わらない）
+    assert "v23" in PROMPT_REQUIRES_COND_OBS
+    assert prompt_requires_row_obs("v23") is True
+    assert prompt_requires_row_obs("v21") is False
+    assert prompt_requires_row_obs("v22") is False
+    assert prompt_requires_row_obs("free") is False
+    # 既定の版はこの版に依存しない（評価で確認するまで切り替えない）
+    assert prompt_requires_row_obs(None) is (PROMPT_VERSION == "v23")
+    assert PROMPT_VERSION == "v21"

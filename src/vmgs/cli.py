@@ -18,6 +18,7 @@ from vmgs.agent.prompts import (
     PROMPTS,
     SYSTEM_PROMPT,
     prompt_requires_cond_obs,
+    prompt_requires_row_obs,
 )
 from vmgs.agent.protocol import AgentFactory, TurnAgent
 from vmgs.agent.runner import AgentRunner
@@ -248,6 +249,8 @@ def cmd_run(args: argparse.Namespace) -> int:
                 config = config.model_copy(update={"planning_observations": True})
             if prompt_requires_cond_obs(args.prompt):
                 config = config.model_copy(update={"condition_observations": True})
+            if prompt_requires_row_obs(args.prompt):
+                config = config.model_copy(update={"row_observation": True})
             weather = _load_weather(config.scenario)
             if weather is None:
                 return 2
@@ -375,6 +378,7 @@ def cmd_experiment(args: argparse.Namespace) -> int:
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
         condition_configs={n for n, sp in specs.items() if sp.condition_observations},
+        row_configs={n for n, sp in specs.items() if sp.row_observation},
         truncate_irrigation=not args.no_truncate,
     )
     result = run_experiment(exp_spec, weather, RUNS_DIR, max_runs=args.max_runs)
@@ -428,6 +432,7 @@ def _cmd_suite(args: argparse.Namespace) -> int:
         agent_infos=infos,
         planning_configs={n for n, sp in specs.items() if sp.planning_observations},
         condition_configs={n for n, sp in specs.items() if sp.condition_observations},
+        row_configs={n for n, sp in specs.items() if sp.row_observation},
         truncate_irrigation=not args.no_truncate,
     )
     print(result.summary_md)
