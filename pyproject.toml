@@ -2,6 +2,8 @@
 name = "vmgs"
 version = "0.1.0"
 description = "仮想移動緑化シミュレータ"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "stzn", email = "sztk1209@gmail.com" }
 ]

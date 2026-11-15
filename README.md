@@ -16,6 +16,7 @@ LLM エージェントが「植物の健康維持」と「都市の暑熱緩和�
 - [ディレクトリ構成](#ディレクトリ構成)
 - [研究の現状](#研究の現状)
 - [ドキュメント](#ドキュメント)
+- [ライセンス](#ライセンス)
 
 ## セットアップ
 必要なもの: Python 3.11 以上、[uv](https://docs.astral.sh/uv/)。
@@ -162,6 +163,9 @@ tasks/          進捗（todo）と学び（lessons）
 | [docs/research-summary.md](docs/research-summary.md) | 研究のまとめ: 資源配分のボトルネックは「計画能力」か |
 | [tasks/todo.md](tasks/todo.md) | 進捗 |
 | [tasks/lessons.md](tasks/lessons.md) | 学び・修正パターン |
+
+## ライセンス
+コードは [MIT License](LICENSE)。`data/weather/` の気象データは [Open-Meteo](https://open-meteo.com/) の過去データ（CC BY 4.0）に由来します。
 
 ## 技術スタック
 Python 3.11+ / uv / pytest-bdd（BDD） / LangGraph / Pydantic / Open-Meteo API / LangSmith / OpenAI・Anthropic・Ollama
