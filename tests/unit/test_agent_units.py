@@ -173,6 +173,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
                 "v21",
                 "v22",
                 "v23",
+                "v24",
             }
         )
         == PROMPT_REQUIRES_COND_OBS
@@ -462,9 +463,21 @@ def test_プロンプトv23はキー一覧に_checklist_row_を1行足すだけ�
     # 条件観測も要する。行観測を要するのは v23 だけ（他の版の世界は変わらない）
     assert "v23" in PROMPT_REQUIRES_COND_OBS
     assert prompt_requires_row_obs("v23") is True
+    assert prompt_requires_row_obs("v24") is True
     assert prompt_requires_row_obs("v21") is False
     assert prompt_requires_row_obs("v22") is False
     assert prompt_requires_row_obs("free") is False
     # 既定の版はこの版に依存しない（評価で確認するまで切り替えない）
     assert prompt_requires_row_obs(None) is (PROMPT_VERSION == "v23")
     assert PROMPT_VERSION == "v21"
+
+
+def test_プロンプトv24はキー説明に_0は何もしない_を明記するだけでv23と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPTS
+
+    v23, v24 = PROMPTS["v23"], PROMPTS["v24"]
+    old = "最初に当てはまった行の番号（どれにも当てはまらなければ 0）。その行の行動に従う"
+    new = "最初に当てはまった行の番号。その行の行動に従う。どの行にも当てはまらなければ 0 で、何もしない"
+    assert old in v23 and new in v24 and old not in v24
+    assert v24.replace(new, old) == v23
+    assert "v24" in PROMPT_REQUIRES_COND_OBS

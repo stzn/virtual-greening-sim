@@ -553,7 +553,16 @@ _m = SYSTEM_PROMPT_V21.index("\n", _k) + 1
 SYSTEM_PROMPT_V23 = SYSTEM_PROMPT_V21[:_m] + _V23_KEY + SYSTEM_PROMPT_V21[_m:]
 
 # 行観測（checklist_row）を要する版。条件観測も要する（PROMPT_REQUIRES_COND_OBS に含まれる）
-PROMPT_REQUIRES_ROW_OBS = frozenset({"v23"})
+# v24: v23 のキー説明に「どの行にも当てはまらなければ 0（何もしない）」を明記する（v23 のトレースで、
+# 0 のときの行動が未定義のため 8b が行 #1 へ引き戻されたことへの対処）
+_V24_KEY_OLD = "最初に当てはまった行の番号（どれにも当てはまらなければ 0）。その行の行動に従う"
+_V24_KEY_NEW = (
+    "最初に当てはまった行の番号。その行の行動に従う。どの行にも当てはまらなければ 0 で、何もしない"
+)
+assert SYSTEM_PROMPT_V23.count(_V24_KEY_OLD) == 1
+SYSTEM_PROMPT_V24 = SYSTEM_PROMPT_V23.replace(_V24_KEY_OLD, _V24_KEY_NEW)
+
+PROMPT_REQUIRES_ROW_OBS = frozenset({"v23", "v24"})
 
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 # 条件観測を要する版: v11 以降の番号付きの版（PROMPTS の定義後に導出する。版を足しても更新は要らない）
@@ -728,6 +737,7 @@ PROMPTS: dict[str, str] = {
     "v21": SYSTEM_PROMPT_V21,
     "v22": SYSTEM_PROMPT_V22,
     "v23": SYSTEM_PROMPT_V23,
+    "v24": SYSTEM_PROMPT_V24,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）
