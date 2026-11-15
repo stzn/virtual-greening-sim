@@ -562,7 +562,16 @@ _V24_KEY_NEW = (
 assert SYSTEM_PROMPT_V23.count(_V24_KEY_OLD) == 1
 SYSTEM_PROMPT_V24 = SYSTEM_PROMPT_V23.replace(_V24_KEY_OLD, _V24_KEY_NEW)
 
-PROMPT_REQUIRES_ROW_OBS = frozenset({"v23", "v24"})
+# v25: v24 の「0 は何もしない」に、行 #1 を自分で当てはめて移動しないことを足す（v24 の 8b で、
+# 行 0 の雨が近い状況でも B へ移動した失敗への対処）
+_V25_KEY_NEW = (
+    "最初に当てはまった行の番号。その行の行動に従う。"
+    "どの行にも当てはまらなければ 0 で、何もしない（表を自分で当てはめ直して移動や散水をしない）"
+)
+SYSTEM_PROMPT_V25 = SYSTEM_PROMPT_V24.replace(_V24_KEY_NEW, _V25_KEY_NEW)
+assert SYSTEM_PROMPT_V25 != SYSTEM_PROMPT_V24
+
+PROMPT_REQUIRES_ROW_OBS = frozenset({"v23", "v24", "v25"})
 
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
 # 条件観測を要する版: v11 以降の番号付きの版（PROMPTS の定義後に導出する。版を足しても更新は要らない）
@@ -738,6 +747,7 @@ PROMPTS: dict[str, str] = {
     "v22": SYSTEM_PROMPT_V22,
     "v23": SYSTEM_PROMPT_V23,
     "v24": SYSTEM_PROMPT_V24,
+    "v25": SYSTEM_PROMPT_V25,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

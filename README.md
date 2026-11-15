@@ -145,7 +145,7 @@ tasks/          進捗（todo）と学び（lessons）
 ```
 
 ## 研究の現状
-チェックリスト形式のプロンプトの「かつ」「未満」などの読み取りを、プロンプトの版（v1〜v24）の変更で改善してきました。
+チェックリスト形式のプロンプトの「かつ」「未満」などの読み取りを、プロンプトの版（v1〜v25）の変更で改善してきました。
 
 - 既定は **v21**。全 51 シナリオを qwen3:14b・Claude Haiku 5.5・Claude Sonnet 5.5 のすべてが通過します（境界値 10 件を含む）。
 - qwen3 だけで足した「行の組み合わせ」8 件のうち、7 件通過・1 件は既知の未達（直前に B から A へ移動した直後の猛暑・乾燥で B への移動を試みる。最終行動は世界のガードで正しい）。
@@ -159,7 +159,7 @@ tasks/          進捗（todo）と学び（lessons）
 | --- | --- |
 | [docs/PLAN.md](docs/PLAN.md) | 開発計画 |
 | [docs/model.md](docs/model.md) | 数理モデル（植物・スポット・毎時の更新式） |
-| [docs/prompt-history.md](docs/prompt-history.md) | プロンプト v1〜v24 の経緯・到達点・限界（まずここ） |
+| [docs/prompt-history.md](docs/prompt-history.md) | プロンプト v1〜v25 の経緯・到達点・限界（まずここ） |
 | [docs/eval-results.md](docs/eval-results.md) | 各評価の結果と実験の記録 |
 | [docs/research-summary.md](docs/research-summary.md) | 研究のまとめ: 資源配分のボトルネックは「計画能力」か |
 | [tasks/todo.md](tasks/todo.md) | 進捗 |
