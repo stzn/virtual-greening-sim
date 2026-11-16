@@ -571,6 +571,53 @@ _V25_KEY_NEW = (
 SYSTEM_PROMPT_V25 = SYSTEM_PROMPT_V24.replace(_V24_KEY_NEW, _V25_KEY_NEW)
 assert SYSTEM_PROMPT_V25 != SYSTEM_PROMPT_V24
 
+# v26: 判断チェックリストの表（条件を AND で並べた行）を、1 つずつ確認する質問の流れに書き換える。
+# 世界の答え（checklist_row）には頼らず、8b が AND の評価を落とす問題を書式で直せるかを測る
+_V26_HEAD = "## 判断チェックリスト（上から順。最初に当てはまる行に従う）"
+_V26_TAIL = "## 追加ルール"
+_V26_FLOW = """\
+## 判断チェックリスト（質問 1 から順に、1 つずつ確認する。行動が決まったらそこで終わり）
+各質問は、確認項目を a, b, c… の順に 1 つずつ見る。項目が **不合格** なら、その質問は不成立なので次の質問へ進む。すべて合格したときだけ、その質問の行動を実行して終わる（以降の質問は見ない）。
+
+**質問 1（日影の B へ退避するか）**
+- a. `in_sunlight` が true か → false なら不合格
+- b. `heat_trigger` が true か → false なら不合格
+- c. `moisture_below_40` が true か → false なら不合格
+- d. `battery_below_15` が false か → true なら不合格
+- e. move_budget_remaining が 1 以上か → 0 なら不合格
+- すべて合格 → B へ move_to_spot する
+
+**質問 2（水分不足で散水するか）**
+- a. `moisture_below_30` が true か → false なら不合格
+- b. `rain_leaves_dry` が true か → false なら不合格
+- c. 水タンク残量が 50ml 以上か → 50ml 未満なら不合格
+- すべて合格 → irrigate する。量は「1000ml」と「水タンク残量」の**小さい方**（例: 残量 120ml なら 120ml）
+
+**質問 3（暑熱緩和で散水するか）**
+- a. C にいるか → C 以外なら不合格
+- b. 気温が 33℃ 以上か → 33℃ 未満なら不合格
+- c. 土壌水分が 50〜70% か → 範囲外なら不合格
+- d. 水タンクが 4000ml 以上か → 未満なら不合格
+- e. `rain_leaves_dry` が true か → false なら不合格
+- すべて合格 → 暑熱緩和のため irrigate 500ml
+
+**質問 4（何もしないでよいか）**
+- a. `moisture_below_30` が false か → true なら不合格
+- b. `moisture_above_70` が false か → true なら不合格
+- c. 健康度が 70 以上か → 未満なら不合格
+- すべて合格 → **何もしない**（move_to_spot も irrigate も呼ばない）
+
+**質問 5（過湿か）**
+- `moisture_above_70` が true → 何もしない（散水しない）
+
+どの質問にも当てはまらなければ、何もしない。
+
+"""
+assert SYSTEM_PROMPT_V21.count(_V26_HEAD) == 1 and SYSTEM_PROMPT_V21.count(_V26_TAIL) == 1
+_a = SYSTEM_PROMPT_V21.index(_V26_HEAD)
+_b = SYSTEM_PROMPT_V21.index(_V26_TAIL)
+SYSTEM_PROMPT_V26 = SYSTEM_PROMPT_V21[:_a] + _V26_FLOW + SYSTEM_PROMPT_V21[_b:]
+
 PROMPT_REQUIRES_ROW_OBS = frozenset({"v23", "v24", "v25"})
 
 # 条件観測が必要な版（世界側で condition_observations を有効にする）
@@ -748,6 +795,7 @@ PROMPTS: dict[str, str] = {
     "v23": SYSTEM_PROMPT_V23,
     "v24": SYSTEM_PROMPT_V24,
     "v25": SYSTEM_PROMPT_V25,
+    "v26": SYSTEM_PROMPT_V26,
     "free": SYSTEM_PROMPT_FREE,  # チェックリストなし。既定ではなく、名前で選ぶ
     "hybrid": SYSTEM_PROMPT_HYBRID,  # free + 資源計画のヒント（閾値なし）
     "plan": SYSTEM_PROMPT_PLAN,  # hybrid + 計画観測の説明（世界側で計画観測を有効にする）

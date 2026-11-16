@@ -175,6 +175,7 @@ def test_プロンプトv11は条件の判定キーを説明し_条件欄がそ�
                 "v23",
                 "v24",
                 "v25",
+                "v26",
             }
         )
         == PROMPT_REQUIRES_COND_OBS
@@ -494,3 +495,16 @@ def test_プロンプトv25はキー説明に_当てはめ直さない_を足す
     assert new in v25 and new not in v24
     assert v25.replace(new, old) == v24
     assert "v25" in PROMPT_REQUIRES_COND_OBS
+
+
+def test_プロンプトv26はチェックリストの表だけを質問の流れに置き換えてv21と同じ() -> None:
+    from vmgs.agent.prompts import PROMPT_REQUIRES_COND_OBS, PROMPTS, prompt_requires_row_obs
+
+    v21, v26 = PROMPTS["v21"], PROMPTS["v26"]
+    head, tail = "## 判断チェックリスト", "## 追加ルール"
+    a21, b21 = v21.index(head), v21.index(tail)
+    a26, b26 = v26.index(head), v26.index(tail)
+    assert v21[:a21] == v26[:a26] and v21[b21:] == v26[b26:]
+    assert "質問 1" in v26 and "| # | 条件 | 行動 |" not in v26
+    assert "v26" in PROMPT_REQUIRES_COND_OBS
+    assert prompt_requires_row_obs("v26") is False
