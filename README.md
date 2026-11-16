@@ -159,7 +159,8 @@ tasks/          進捗（todo）と学び（lessons）
 | --- | --- |
 | [docs/PLAN.md](docs/PLAN.md) | 開発計画 |
 | [docs/model.md](docs/model.md) | 数理モデル（植物・スポット・毎時の更新式） |
-| [docs/prompt-history.md](docs/prompt-history.md) | プロンプト v1〜v25 の経緯・到達点・限界（まずここ） |
+| [docs/checklist-reading-summary.md](docs/checklist-reading-summary.md) | 研究のまとめ: LLM はチェックリストをどこまで読めるか（v1〜v26・5 モデル。まずここ） |
+| [docs/prompt-history.md](docs/prompt-history.md) | プロンプト v1〜v25 の経緯・到達点・限界 |
 | [docs/eval-results.md](docs/eval-results.md) | 各評価の結果と実験の記録 |
 | [docs/research-summary.md](docs/research-summary.md) | 研究のまとめ: 資源配分のボトルネックは「計画能力」か |
 | [tasks/todo.md](tasks/todo.md) | 進捗 |
