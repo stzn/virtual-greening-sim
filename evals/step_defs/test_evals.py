@@ -53,6 +53,7 @@ for _name in (
     "conjunction",
     "boundary",
     "combo",
+    "row_zero",
 ):
     scenarios(str(FEATURES / f"{_name}.feature"))
 

@@ -109,7 +109,7 @@ uv run mypy src tests evals scripts    # 型検査（strict）
 ```
 
 - `tests/features/` の Gherkin（日本語）が世界・ツール・エージェントの仕様です。
-- **評価**（`evals/features/`、全 59 シナリオ）は LLM の判断品質を測ります。各シナリオを 5 回試行（初期条件を少し揺らす）し、4 回以上が期待どおりなら通過です。結果は `runs/evals/` に保存されます。
+- **評価**（`evals/features/`、全 65 シナリオ。うち 6 件は「どの行にも当てはまらない」行 0 の状況（`row_zero.feature`））は LLM の判断品質を測ります。各シナリオを 5 回試行（初期条件を少し揺らす）し、4 回以上が期待どおりなら通過です。結果は `runs/evals/` に保存されます。
 
 ```bash
 # 全評価（ローカルの qwen3:14b で約 2 時間。API 費用なし）
