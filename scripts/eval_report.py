@@ -41,7 +41,7 @@ def summarize(data: dict[str, Any]) -> str:
     tool_calls = sum(len(t["calls"]) for t in traces)
     lines = [
         (
-            f"{data['provider']} {data['model']} {data['prompt_version']}: "
+            f"{data['provider']} {data['model']} {data['prompt_version']} seed={data.get('seed', 0)}: "
             f"通過 {passed}/{len(scenarios)}（{len(traces)} 試行）"
         ),
         (

@@ -72,6 +72,7 @@ def scoreboard(settings: Settings) -> Iterator[list[dict[str, Any]]]:
         "provider": provider,
         "model": model,
         "prompt_version": os.environ.get("EVAL_PROMPT", PROMPT_VERSION),
+        "seed": int(os.environ.get("EVAL_SEED", "0")),
         "scenarios": rows,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")

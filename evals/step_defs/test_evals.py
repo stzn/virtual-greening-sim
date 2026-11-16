@@ -134,6 +134,7 @@ def _w_run(ec: EvalCtx, eval_model: BaseChatModel) -> None:
         PROMPTS[version],
         condition_observations=prompt_requires_cond_obs(version),
         row_observation=prompt_requires_row_obs(version),
+        seed=int(os.environ.get("EVAL_SEED", "0")),
     )
 
 
