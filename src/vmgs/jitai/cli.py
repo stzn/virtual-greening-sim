@@ -32,6 +32,39 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     j.add_argument("--out", type=Path, default=DEFAULT_OUT)
 
 
+def add_demand_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    d = sub.add_parser(
+        "demand", help="vmgs jitai の需要の集計を stage.json の demand に書き戻した舞台を書き出す"
+    )
+    d.add_argument(
+        "--stage", type=Path, required=True, help="元の舞台の stage.json（上書きしない）"
+    )
+    d.add_argument("--jitai", type=Path, required=True, help="vmgs jitai の出力")
+    d.add_argument("--out", type=Path, required=True, help="書き戻した舞台の出力先")
+
+
+def cmd_demand(args: argparse.Namespace) -> int:
+    from vmgs.fleet.stage_world import load_stage
+    from vmgs.jitai.demand import apply_demand
+
+    if args.out.resolve() == args.stage.resolve():
+        print("--out は元の舞台と別のファイルにしてください", file=sys.stderr)
+        return 1
+    stage = load_stage(args.stage)
+    jitai_out = json.loads(args.jitai.read_text(encoding="utf-8"))
+    try:
+        out = apply_demand(stage, jitai_out)
+    except ValueError as e:
+        print(f"需要を書き戻せません: {e}", file=sys.stderr)
+        return 1
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(out.model_dump_json(indent=1) + "\n", encoding="utf-8")
+    cells = sum(len(s.demand) for s in out.spots)
+    spots = sum(1 for s in out.spots if s.demand)
+    print(f"書き出した: {args.out}（需要 {cells} セル・{spots}/{len(out.spots)} 地点）")
+    return 0
+
+
 def _markdown(summary: dict[str, Any]) -> str:
     rate = summary["intervention_rate"]
     head = (
