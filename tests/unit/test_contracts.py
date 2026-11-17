@@ -9,9 +9,11 @@ from pydantic import ValidationError
 from vmgs.contracts import (
     SCHEMA_FILES,
     Dispatch,
+    JitaiSummary,
     Stage,
     dispatch_errors_against_stage,
     generated_schemas,
+    jitai_summary_errors_against_stage,
 )
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
@@ -81,3 +83,46 @@ def test_舞台にない地点や別の区域を指す配車は誤りとして�
     errors = dispatch_errors_against_stage(Dispatch.model_validate(data), stage)
     assert any("NOPE" in e for e in errors)
     assert any("shibuya" in e for e in errors)
+
+
+def test_JITAIの集計のサンプルは舞台のサンプルと整合する() -> None:
+    stage = Stage.model_validate(_load("stage.sample.json"))
+    summary = JitaiSummary.model_validate(_load("jitai-summary.sample.json"))
+    assert jitai_summary_errors_against_stage(summary, stage) == []
+
+
+def test_JITAIの集計で判定の数が介入と見送りの和と違えば拒否する() -> None:
+    data = _load("jitai-summary.sample.json")
+    data["zones"][0]["decisions"] = 99
+    with pytest.raises(ValidationError):
+        JitaiSummary.model_validate(data)
+
+
+def test_JITAIの集計で同じ区画と時刻が重なれば拒否する() -> None:
+    data = _load("jitai-summary.sample.json")
+    data["zones"][1] = {**data["zones"][0]}
+    with pytest.raises(ValidationError):
+        JitaiSummary.model_validate(data)
+
+
+def test_JITAIの集計は個人の記録を持てない() -> None:
+    # 知らないキー（records・worker_id など）は拒否する
+    data = _load("jitai-summary.sample.json")
+    data["records"] = [{"worker_id": "W01"}]
+    with pytest.raises(ValidationError):
+        JitaiSummary.model_validate(data)
+
+
+def test_JITAIの集計の区画の原点が舞台の区域と違えば誤りとして挙げる() -> None:
+    stage = Stage.model_validate(_load("stage.sample.json"))
+    data = _load("jitai-summary.sample.json")
+    data["grid"]["origin_lon"] = 139.0
+    data["stage_ref"]["date"] = "2025-07-01"
+    errors = jitai_summary_errors_against_stage(JitaiSummary.model_validate(data), stage)
+    assert any("原点" in e for e in errors)
+    assert any("2025-07-01" in e for e in errors)
+
+
+def test_日射遮蔽率は建物と樹冠を合わせた値として説明する() -> None:
+    desc = generated_schemas()["stage"]["$defs"]["SpotHour"]["properties"]["shade_fraction"]
+    assert "樹冠" in desc["description"]

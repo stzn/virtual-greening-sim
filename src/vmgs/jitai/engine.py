@@ -264,6 +264,36 @@ def demand_zone_counts(
     ]
 
 
+def zone_hour_summary(
+    records: Sequence[Record],
+    home_spot: Mapping[str, str],
+    zone_of: Mapping[str, tuple[int, int]],
+    min_workers: int = DEMAND_MIN_WORKERS,
+) -> list[dict[str, Any]]:
+    """区画・時刻ごとの判定・介入・段階別の見送りの件数（min_workers 人以上のものだけ）。"""
+    counts: dict[tuple[tuple[int, int], int], Counter[str]] = {}
+    people: dict[tuple[tuple[int, int], int], set[str]] = {}
+    for r in records:
+        key = (zone_of[home_spot[r.worker_id]], r.time_min // 60)
+        c = counts.setdefault(key, Counter())
+        c["decisions"] += 1
+        c["interventions" if r.outcome == "intervened" else f"skipped_{r.stage}"] += 1
+        people.setdefault(key, set()).add(r.worker_id)
+    return [
+        {
+            "zone": zone,
+            "hour": h,
+            "decisions": c["decisions"],
+            "interventions": c["interventions"],
+            "skipped_calendar": c["skipped_calendar"],
+            "skipped_pods": c["skipped_pods"],
+            "skipped_pet": c["skipped_pet"],
+        }
+        for (zone, h), c in sorted(counts.items())
+        if len(people[(zone, h)]) >= min_workers
+    ]
+
+
 def summarize(result: JitaiResult) -> dict[str, Any]:
     records = result.records
     n = len(records)
