@@ -29,6 +29,7 @@ from vmgs.experiment.configs import THINK_TIMEOUT_S, ConfigSpec, parse_config_sp
 from vmgs.experiment.runner import ExperimentSpec, run_experiment, run_suite
 from vmgs.experiment.stress import STRESS_SUITE
 from vmgs.experiment.variants import BaseConditions
+from vmgs.fleet.cli import add_dispatch_parser, cmd_dispatch
 from vmgs.obs.telemetry import estimate_cost_usd, summarize_telemetry
 from vmgs.obs.tracing import apply_tracing, resolve_tracing
 from vmgs.sim.presets import PRESETS
@@ -573,6 +574,9 @@ def main(argv: list[str] | None = None) -> int:
     add_sim_options(c)
     c.add_argument("--agents", default="baseline,noop", help="カンマ区切り（baseline,noop,llm）")
     c.set_defaults(func=cmd_compare)
+
+    add_dispatch_parser(sub)
+    sub.choices["dispatch"].set_defaults(func=lambda a: cmd_dispatch(a, WEATHER_DIR))
     args = parser.parse_args(argv)
     return int(args.func(args))
 

@@ -99,6 +99,14 @@ uv run vmgs experiment --suite stress --conditions dry_before_rain,wet_rain ... 
 ```
 `:free` はチェックリストなしのプロンプト（世界のしくみ・ツール・回答形式のみ）。
 
+### 舞台の地点での複数ポッドの配車
+舞台（tokyo-green-simulator）の `stage.json` から、PET の改善が大きい地点へ複数のポッドを配車し、`dispatch.json`（[データ契約 v1](contracts/README.md)）を書き出します。判断は計算（貪欲法）で行い、LLM は使いません。
+
+```bash
+uv run vmgs dispatch --stage contracts/fixtures/stage.sample.json --scenario heatwave --out runs/dispatch.json --pods 3 --compare
+```
+`--compare` で、ポッドなし・貪欲法・固定配置・何もしないの、人の快適度（PET）と植物の健康の比較表も出します。詳しくは [docs/dispatch.md](docs/dispatch.md)。
+
 ## テストと評価
 通常のテストと、LLM を呼ぶ評価は分かれています。
 
@@ -135,6 +143,9 @@ src/vmgs/
   experiment/   複数構成×バリアントの比較、ストレススイート
   eval/         評価の試行・述語・指標・レポート
   obs/          テレメトリ・トレース
+  fleet/        舞台の stage.json から N 地点の世界を作り、複数ポッドを配車して dispatch.json を書き出す
+  thermal.py    PET と平均放射温度の近似（配車と解析基盤で共有）
+  contracts.py  舞台とのデータ契約 v1（正本）
   cli.py        `vmgs` コマンド
 tests/          通常のテスト（features/ が仕様、step_defs/、unit/）
 evals/          LLM 判断品質の評価（features/、step_defs/）
@@ -160,6 +171,9 @@ tasks/          進捗（todo）と学び（lessons）
 | [docs/checklist-reading-summary.md](docs/checklist-reading-summary.md) | 研究のまとめ: LLM はチェックリストをどこまで読めるか（v1〜v26・5 モデル。まずここ） |
 | [docs/prompt-history.md](docs/prompt-history.md) | プロンプト v1〜v25 の経緯・到達点・限界 |
 | [docs/eval-results.md](docs/eval-results.md) | 各評価の結果と実験の記録 |
+| [docs/integration-plan.md](docs/integration-plan.md) | 舞台（tokyo-green-simulator）との連携計画 |
+| [docs/dispatch.md](docs/dispatch.md) | 複数ポッドの配車（フェーズ 2）の設計と baseline との比較 |
+| [docs/thermal.md](docs/thermal.md) | PET・平均放射温度の近似の式と限界 |
 | [docs/research-summary.md](docs/research-summary.md) | 研究のまとめ: 資源配分のボトルネックは「計画能力」か |
 | [tasks/todo.md](tasks/todo.md) | 進捗 |
 | [tasks/lessons.md](tasks/lessons.md) | 学び・修正パターン |
