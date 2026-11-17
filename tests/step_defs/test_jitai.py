@@ -1,6 +1,8 @@
 """JITAI の模擬（vmgs jitai）。"""
 
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +10,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from vmgs import cli
+from vmgs.jitai import message
 
 scenarios("jitai/jitai.feature")
 
@@ -24,14 +27,14 @@ def _g_inputs(ctx: dict[str, Any], stage: str, dispatch: str) -> None:
     ctx["stage"], ctx["dispatch"] = ROOT / stage, ROOT / dispatch
 
 
-@when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を回す'))
-def _w_run(
+def _run(
     ctx: dict[str, Any],
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
     scenario: str,
     n: int,
+    extra: list[str],
 ) -> None:
     monkeypatch.setattr(cli, "WEATHER_DIR", ROOT / "data" / "weather")
     out = tmp_path / "jitai.json"
@@ -50,12 +53,62 @@ def _w_run(
             "0",
             "--out",
             str(out),
+            *extra,
         ]
     )
     captured = capsys.readouterr()
     ctx["stdout"], ctx["stderr"] = captured.out, captured.err
     ctx["raw"] = out.read_text(encoding="utf-8") if out.exists() else ""
     ctx["result"] = json.loads(ctx["raw"]) if ctx["raw"] else {}
+
+
+@when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を回す'))
+def _w_run(
+    ctx: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: str,
+    n: int,
+) -> None:
+    _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, [])
+
+
+@when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を通知文つきで回す'))
+def _w_run_messages(
+    ctx: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: str,
+    n: int,
+) -> None:
+    _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, ["--messages"])
+
+
+@when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を LLM の言い換えつきで回す'))
+def _w_run_llm(
+    ctx: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: str,
+    n: int,
+) -> None:
+    _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, ["--messages", "--llm", "ollama:fake"])
+
+
+@given("LLM は徒歩の分を 1 分多く読み違えて言い換える")
+def _g_bad_llm(ctx: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    # 実際の ollama は呼ばない。指示の「元の文」の徒歩の分だけを 1 分多くして返す偽の LLM
+    def misread(prompt: str) -> str:
+        line = next(x for x in prompt.splitlines() if x.startswith("元の文: "))
+        text = line.removeprefix("元の文: ")
+        out = re.sub(r"徒歩 (\d+) 分", lambda m: f"徒歩 {int(m.group(1)) + 1} 分", text)
+        ctx.setdefault("llm_outputs", []).append(out)
+        return out
+
+    monkeypatch.setattr(message, "ollama_paraphraser", lambda model: misread)
 
 
 def _records(ctx: dict[str, Any]) -> list[dict[str, Any]]:
@@ -239,3 +292,44 @@ def _t_recovery_rules(ctx: dict[str, Any]) -> None:
     assert rules["recovery"] is True
     assert rules["recovery_carryover_minutes"] == 30
     assert rules["recovery_pod_green"] == 0.8
+
+
+def _intervened(ctx: dict[str, Any]) -> list[dict[str, Any]]:
+    return [r for r in _records(ctx) if r["outcome"] == "intervened"]
+
+
+@then("介入した記録には、地点名と徒歩の分と休憩の分を含む通知文がある")
+def _t_messages(ctx: dict[str, Any]) -> None:
+    stage = json.loads(ctx["stage"].read_text(encoding="utf-8"))
+    names = {s["id"]: s["name"] for s in stage["spots"]}
+    done = _intervened(ctx)
+    assert done
+    for r in done:
+        m = r["message"]
+        assert m["source"] == "template"
+        assert names[r["spot_id"]] in m["text"]
+        walk_min = math.ceil(r["walk_m"] / 80)
+        assert f"徒歩 {walk_min} 分" in m["text"]
+        assert "10 分休みませんか" in m["text"]
+        assert m["text"].startswith(r["time"])
+
+
+@then("見送った記録には通知文が無い")
+def _t_no_message_for_skips(ctx: dict[str, Any]) -> None:
+    skipped = [r for r in _records(ctx) if r["outcome"] == "skipped"]
+    assert skipped
+    assert all(r["message"] is None for r in skipped)
+
+
+@then("介入した記録の通知文はすべてテンプレートで、LLM の出力と外れた理由が記録されている")
+def _t_fallback(ctx: dict[str, Any]) -> None:
+    done = _intervened(ctx)
+    assert done
+    assert len(ctx["llm_outputs"]) == len(done)
+    for r in done:
+        m = r["message"]
+        assert m["source"] == "template"
+        assert m["llm_text"] in ctx["llm_outputs"]
+        assert any(p.startswith(("unknown_number:", "missing_walk")) for p in m["llm_problems"])
+    assert ctx["result"]["messages"]["llm"] == "ollama:fake"
+    assert ctx["result"]["messages"]["fallbacks"] == len(done)
