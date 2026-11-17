@@ -140,10 +140,60 @@ def _t_no_hrv(ctx: dict[str, Any]) -> None:
         assert word not in raw, word
 
 
-@then("需要の集計は地点・時刻・件数だけで、3 人未満の地点・時刻を含まない")
+@then("需要の集計は徒歩圏の区画・時刻ごとで、3 人未満の区画・時刻を含まない")
 def _t_demand(ctx: dict[str, Any]) -> None:
     demand = ctx["result"]["demand"]
     assert demand["min_workers"] == 3
+    assert demand["zone_m"] == 400
     for cell in demand["cells"]:
         assert set(cell) == {"spot_id", "hour", "weight"}
-        assert cell["weight"] >= 3
+    # 区画・時刻ごとの件数は 3 人以上のまとまりだけ（1 人 1 件以上なので件数も 3 以上）
+    for zone in demand["zones"]:
+        assert set(zone) == {"zone", "hour", "count", "spots"}
+        assert zone["count"] >= 3
+
+
+@when("JITAI の需要を舞台に書き戻す")
+def _w_writeback(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    jitai = tmp_path / "jitai.json"
+    ctx["demand_stage"] = tmp_path / "stage.demand.json"
+    ctx["demand_code"] = cli.main(
+        [
+            "demand",
+            "--stage",
+            str(ctx["stage"]),
+            "--jitai",
+            str(jitai),
+            "--out",
+            str(ctx["demand_stage"]),
+        ]
+    )
+    ctx["demand_stderr"] = capsys.readouterr().err
+
+
+@then("書き戻しの終了コードは 0 になる")
+def _t_writeback_code(ctx: dict[str, Any]) -> None:
+    assert ctx["demand_code"] == 0, ctx["demand_stderr"]
+
+
+@then("書き戻した舞台の需要は、JITAI の需要の集計と一致する")
+def _t_writeback_matches(ctx: dict[str, Any]) -> None:
+    stage = json.loads(ctx["demand_stage"].read_text(encoding="utf-8"))
+    written = sorted((s["id"], d["hour"], d["weight"]) for s in stage["spots"] for d in s["demand"])
+    cells = sorted((c["spot_id"], c["hour"], c["weight"]) for c in ctx["result"]["demand"]["cells"])
+    assert written == cells and cells
+
+
+@when("書き戻した舞台で配車する")
+def _w_dispatch(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    out = tmp_path / "dispatch.demand.json"
+    code = cli.main(
+        ["dispatch", "--stage", str(ctx["demand_stage"]), "--scenario", "normal", "--out", str(out)]
+    )
+    assert code == 0, capsys.readouterr().err
+    ctx["dispatch_out"] = json.loads(out.read_text(encoding="utf-8"))
+
+
+@then("配車は既定の需要を使っていない")
+def _t_no_default_demand(ctx: dict[str, Any]) -> None:
+    assert "default-demand" not in ctx["dispatch_out"]["generator"]

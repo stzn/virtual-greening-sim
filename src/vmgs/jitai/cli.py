@@ -32,6 +32,39 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     j.add_argument("--out", type=Path, default=DEFAULT_OUT)
 
 
+def add_demand_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    d = sub.add_parser(
+        "demand", help="vmgs jitai の需要の集計を stage.json の demand に書き戻した舞台を書き出す"
+    )
+    d.add_argument(
+        "--stage", type=Path, required=True, help="元の舞台の stage.json（上書きしない）"
+    )
+    d.add_argument("--jitai", type=Path, required=True, help="vmgs jitai の出力")
+    d.add_argument("--out", type=Path, required=True, help="書き戻した舞台の出力先")
+
+
+def cmd_demand(args: argparse.Namespace) -> int:
+    from vmgs.fleet.stage_world import load_stage
+    from vmgs.jitai.demand import apply_demand
+
+    if args.out.resolve() == args.stage.resolve():
+        print("--out は元の舞台と別のファイルにしてください", file=sys.stderr)
+        return 1
+    stage = load_stage(args.stage)
+    jitai_out = json.loads(args.jitai.read_text(encoding="utf-8"))
+    try:
+        out = apply_demand(stage, jitai_out)
+    except ValueError as e:
+        print(f"需要を書き戻せません: {e}", file=sys.stderr)
+        return 1
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(out.model_dump_json(indent=1) + "\n", encoding="utf-8")
+    cells = sum(len(s.demand) for s in out.spots)
+    spots = sum(1 for s in out.spots if s.demand)
+    print(f"書き出した: {args.out}（需要 {cells} セル・{spots}/{len(out.spots)} 地点）")
+    return 0
+
+
 def _markdown(summary: dict[str, Any]) -> str:
     rate = summary["intervention_rate"]
     head = (
@@ -72,11 +105,13 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     from vmgs.fleet.stage_world import StageWorld, load_stage
     from vmgs.jitai import detect, pods, safety
     from vmgs.jitai.calendar import MIN_FREE_MIN
+    from vmgs.jitai.demand import DEMAND_ZONE_M, demand_zones
     from vmgs.jitai.engine import (
         COOLDOWN_AFTER_INTERVENTION_MIN,
         DEMAND_MIN_WORKERS,
         RETRY_AFTER_SKIP_MIN,
         demand_cells,
+        demand_zone_counts,
         run_jitai,
         summarize,
     )
@@ -111,6 +146,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     result = run_jitai(workers, world, dispatch, pets.pet, corrected=not args.no_correction)
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
+    zone_of = demand_zones(stage, DEMAND_ZONE_M)
     out = {
         "generator": f"{_git_version()} jitai",
         "stage_ref": {"area_id": stage.area.id, "date": stage.date.isoformat()},
@@ -133,9 +169,22 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         "records": [r.to_json() for r in result.records],
         "summary": summary,
         "demand": {
-            "note": "過緊張の判定点を、勤務地に近い地点・時刻ごとに数えた集計値",
+            "note": (
+                "過緊張の判定点を、勤務地に近い地点の区画（一辺 zone_m）・時刻ごとに数え、"
+                "min_workers 人以上の区画・時刻だけを、区画内の地点に等分した集計値"
+            ),
             "min_workers": DEMAND_MIN_WORKERS,
-            "cells": demand_cells(result.records, home, DEMAND_MIN_WORKERS),
+            "zone_m": DEMAND_ZONE_M,
+            "zones": [
+                {
+                    "zone": f"{z['zone'][0]},{z['zone'][1]}",
+                    "hour": z["hour"],
+                    "count": z["count"],
+                    "spots": len(z["spot_ids"]),
+                }
+                for z in demand_zone_counts(result.records, home, zone_of, DEMAND_MIN_WORKERS)
+            ],
+            "cells": demand_cells(result.records, home, zone_of, DEMAND_MIN_WORKERS),
         },
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

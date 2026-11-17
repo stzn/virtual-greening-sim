@@ -20,7 +20,7 @@ from vmgs.jitai.workers import Worker, time_grid_min
 
 COOLDOWN_AFTER_INTERVENTION_MIN = 90
 RETRY_AFTER_SKIP_MIN = 15
-DEMAND_MIN_WORKERS = 3  # 需要の集計で、これ未満の人数の地点・時刻は出さない（個人の特定を防ぐ）
+DEMAND_MIN_WORKERS = 3  # 需要の集計で、これ未満の人数の区画・時刻は出さない（個人の特定を防ぐ）
 
 Outcome = Literal["intervened", "skipped"]
 Stage = Literal["calendar", "pods", "pet"]
@@ -173,19 +173,40 @@ def run_jitai(
 def demand_cells(
     records: Sequence[Record],
     home_spot: Mapping[str, str],
+    zone_of: Mapping[str, tuple[int, int]],
     min_workers: int = DEMAND_MIN_WORKERS,
 ) -> list[dict[str, Any]]:
-    """過緊張の判定点を、勤務地に近い地点・時刻ごとに数える。min_workers 人未満のセルは出さない。"""
-    counts: Counter[tuple[str, int]] = Counter()
-    people: dict[tuple[str, int], set[str]] = {}
+    """過緊張の判定点を、勤務地に近い地点の区画・時刻ごとに数え、区画内の地点に等分する。
+
+    min_workers 人未満の区画・時刻は出さない（地点単位より粗く数えることで、少人数でも需要が残る）。
+    """
+    return [
+        {"spot_id": sid, "hour": z["hour"], "weight": z["count"] / len(z["spot_ids"])}
+        for z in demand_zone_counts(records, home_spot, zone_of, min_workers)
+        for sid in z["spot_ids"]
+    ]
+
+
+def demand_zone_counts(
+    records: Sequence[Record],
+    home_spot: Mapping[str, str],
+    zone_of: Mapping[str, tuple[int, int]],
+    min_workers: int = DEMAND_MIN_WORKERS,
+) -> list[dict[str, Any]]:
+    """区画・時刻ごとの判定点の件数（min_workers 人以上のものだけ）と、区画内の地点 ID。"""
+    spots_in: dict[tuple[int, int], list[str]] = {}
+    for sid, zone in sorted(zone_of.items()):
+        spots_in.setdefault(zone, []).append(sid)
+    counts: Counter[tuple[tuple[int, int], int]] = Counter()
+    people: dict[tuple[tuple[int, int], int], set[str]] = {}
     for r in records:
-        key = (home_spot[r.worker_id], r.time_min // 60)
+        key = (zone_of[home_spot[r.worker_id]], r.time_min // 60)
         counts[key] += 1
         people.setdefault(key, set()).add(r.worker_id)
     return [
-        {"spot_id": s, "hour": h, "weight": n}
-        for (s, h), n in sorted(counts.items())
-        if len(people[(s, h)]) >= min_workers
+        {"zone": zone, "hour": h, "count": n, "spot_ids": spots_in[zone]}
+        for (zone, h), n in sorted(counts.items())
+        if len(people[(zone, h)]) >= min_workers
     ]
 
 
