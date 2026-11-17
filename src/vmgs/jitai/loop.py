@@ -104,6 +104,8 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 carryover_min=args.carryover_min,
                 out=jitai_path,
                 summary_out=summary_path,
+                messages=False,
+                llm=None,
             ),
             weather_dir,
         )
