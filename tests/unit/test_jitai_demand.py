@@ -98,3 +98,33 @@ def test_同じ地点と時刻が重なる集計は拒否する() -> None:
     ]
     with pytest.raises(ValueError):
         apply_demand(load_stage(SAMPLE_STAGE), _jitai_out(cells))
+
+
+def test_区画と時刻ごとに判定_介入_段階別の見送りを数え_3人未満は出さない() -> None:
+    from vmgs.jitai.engine import Outcome, Record, Stage, zone_hour_summary
+
+    def rec(t: int, w: str, outcome: Outcome = "skipped", stage: Stage | None = "pods") -> Record:
+        reason = {"pods": "no_pod_nearby", "calendar": "in_meeting", "pet": "pet_route"}
+        return Record(t, w, outcome, stage, reason.get(stage or ""), None, None, None, None, None)
+
+    zone_of = {"A": (0, 0), "B": (0, 0), "C": (3, 3)}
+    home = {"W0": "A", "W1": "B", "W2": "A", "W9": "C"}
+    recs = [
+        rec(12 * 60, "W0", "intervened", None),
+        rec(12 * 60, "W1", stage="calendar"),
+        rec(12 * 60 + 15, "W1", stage="pet"),
+        rec(12 * 60, "W2"),
+        rec(12 * 60, "W9"),
+    ]
+    rows = zone_hour_summary(recs, home, zone_of, min_workers=3)
+    assert rows == [
+        {
+            "zone": (0, 0),
+            "hour": 12,
+            "decisions": 4,
+            "interventions": 1,
+            "skipped_calendar": 1,
+            "skipped_pods": 1,
+            "skipped_pet": 1,
+        }
+    ]

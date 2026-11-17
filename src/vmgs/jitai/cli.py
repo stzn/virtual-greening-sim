@@ -39,6 +39,11 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         help="帰った後に回復が減る時定数 [分]（既定: 30。根拠のない仮の値）",
     )
     j.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    j.add_argument(
+        "--summary-out",
+        type=Path,
+        help="舞台に渡す JITAI の集計（契約 v1 の jitai-summary.json）の出力先",
+    )
 
 
 def add_demand_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -215,5 +220,12 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"書き出した: {args.out}（ワーカー {args.workers} 人・気象 {scenario}）")
+    if args.summary_out is not None:
+        from vmgs.jitai.demand import jitai_summary
+
+        js = jitai_summary(stage, result, home, scenario, f"{_git_version()} jitai")
+        args.summary_out.parent.mkdir(parents=True, exist_ok=True)
+        args.summary_out.write_text(js.model_dump_json(indent=1) + "\n", encoding="utf-8")
+        print(f"書き出した: {args.summary_out}（区画・時刻 {len(js.zones)} 件）")
     print(_markdown(summary))
     return 0
