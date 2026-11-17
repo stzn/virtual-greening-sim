@@ -30,6 +30,7 @@ from vmgs.experiment.runner import ExperimentSpec, run_experiment, run_suite
 from vmgs.experiment.stress import STRESS_SUITE
 from vmgs.experiment.variants import BaseConditions
 from vmgs.fleet.cli import add_dispatch_parser, cmd_dispatch
+from vmgs.jitai.cli import add_jitai_parser, cmd_jitai
 from vmgs.obs.telemetry import estimate_cost_usd, summarize_telemetry
 from vmgs.obs.tracing import apply_tracing, resolve_tracing
 from vmgs.sim.presets import PRESETS
@@ -577,6 +578,8 @@ def main(argv: list[str] | None = None) -> int:
 
     add_dispatch_parser(sub)
     sub.choices["dispatch"].set_defaults(func=lambda a: cmd_dispatch(a, WEATHER_DIR))
+    add_jitai_parser(sub)
+    sub.choices["jitai"].set_defaults(func=lambda a: cmd_jitai(a, WEATHER_DIR))
     args = parser.parse_args(argv)
     return int(args.func(args))
 

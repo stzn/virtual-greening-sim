@@ -81,7 +81,8 @@ def _environment(leave: bool, rng: np.random.Generator) -> tuple[float, float, f
     return green, pet, noise
 
 
-def _ou(n: int, dt: float, sd: float, time_s: float, rng: np.random.Generator) -> FloatArray:
+def ou_process(n: int, dt: float, sd: float, time_s: float, rng: np.random.Generator) -> FloatArray:
+    """定常 SD が sd、時定数 time_s の OU 過程を dt 刻みで n 点（dt と time_s は同じ単位）。"""
     a = np.exp(-dt / time_s)
     x = np.empty(n)
     x[0] = rng.normal(0.0, sd)
@@ -154,7 +155,7 @@ def simulate_study(
                 rise = np.where(after, 1.0 - np.exp(-np.clip(grid_t, 0, None) / p.tau_s), 0.0)
                 ln_hf = (
                     b_s
-                    + _ou(grid_t.size, 1.0, p.ou_sd, p.ou_time_s, rng)
+                    + ou_process(grid_t.size, 1.0, p.ou_sd, p.ou_time_s, rng)
                     + after * offset
                     + amplitude * rise
                 )
