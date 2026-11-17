@@ -10,13 +10,25 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
+import numpy as np
+import numpy.typing as npt
+
+from vmgs.analysis.recording import FloatArray
+from vmgs.analysis.synthetic import TrueParams
 from vmgs.contracts import Dispatch
 from vmgs.fleet.stage_world import StageWorld
 from vmgs.jitai.calendar import MIN_FREE_MIN, free_minutes
-from vmgs.jitai.detect import detection_scores, worker_flags
+from vmgs.jitai.detect import (
+    SUSTAIN_WINDOWS,
+    Z_THRESHOLD,
+    detection_scores,
+    flags_from_z,
+    worker_profile,
+)
 from vmgs.jitai.pods import DWELL_MIN, Occupancy, PodSchedule, walk_minutes
+from vmgs.jitai.recovery import CARRYOVER_MIN, recovery_amplitude, recovery_curve
 from vmgs.jitai.safety import PetFn, pet_check
-from vmgs.jitai.workers import Worker, time_grid_min
+from vmgs.jitai.workers import STEP_MIN, Worker, time_grid_min
 
 COOLDOWN_AFTER_INTERVENTION_MIN = 90
 RETRY_AFTER_SKIP_MIN = 15
@@ -72,6 +84,10 @@ class JitaiResult:
     records: list[Record]
     workers: list[Worker]
     corrected: bool
+    recovery: bool = False
+    carryover_min: float = CARRYOVER_MIN
+    hyperstress_windows: int = 0  # 回復を反映した後に過緊張と判定した窓の数（全員の合計）
+    episode_burden: float = 0.0  # 真のエピソード中の「下げ幅 − 回復」の正の部分 × 分（全員の合計）
 
 
 def _skip(t: int, w: Worker, reason: str, **kw: Any) -> Record:
@@ -147,9 +163,16 @@ def run_jitai(
     pet: PetFn,
     *,
     corrected: bool = True,
+    recovery: bool = True,
+    carryover_min: float = CARRYOVER_MIN,
 ) -> JitaiResult:
+    """時刻順に判定する。recovery なら、介入のたびに回復分を後の窓の ln(HF) に足し、次の判定に反映する。"""
     t_grid = time_grid_min()
-    flags = {w.id: worker_flags(w, corrected=corrected) for w in workers}
+    params = TrueParams()
+    profiles = {w.id: worker_profile(w, corrected=corrected) for w in workers}
+    # 判定は z（個人の基準からのずれ ÷ 揺らぎ）で行う。回復は z に「回復分 ÷ 揺らぎ」を足す
+    z = {w.id: (w.ln_hf - profiles[w.id].predict(t_grid)) / profiles[w.id].sd for w in workers}
+    gained = {w.id: np.zeros(t_grid.size) for w in workers}  # 足した回復分（ln 単位）
     schedule = PodSchedule(dispatch)
     occupancy = Occupancy()
     next_eval = {w.id: 0 for w in workers}
@@ -157,17 +180,48 @@ def run_jitai(
     for i, t_np in enumerate(t_grid):
         t = int(t_np)
         for w in workers:
-            if t < next_eval[w.id] or not flags[w.id][i]:
+            if t < next_eval[w.id] or not _flagged(z[w.id], i):
                 continue
             rec = _decide(t, w, world, schedule, occupancy, pet)
             records.append(rec)
+            if rec.outcome == "intervened" and recovery:
+                assert rec.walk_m is not None and rec.pet_destination_c is not None
+                arrive = t + walk_minutes(rec.walk_m)
+                r = recovery_curve(
+                    t_grid,
+                    arrive,
+                    arrive + DWELL_MIN,
+                    amplitude=recovery_amplitude(rec.pet_destination_c, params),
+                    tau_s=params.tau_s,
+                    carryover_min=carryover_min,
+                )
+                gained[w.id] += r
+                z[w.id] = z[w.id] + r / profiles[w.id].sd
             wait = (
                 COOLDOWN_AFTER_INTERVENTION_MIN
                 if rec.outcome == "intervened"
                 else RETRY_AFTER_SKIP_MIN
             )
             next_eval[w.id] = t + wait
-    return JitaiResult(records, list(workers), corrected)
+    windows = sum(int(flags_from_z(z[w.id]).sum()) for w in workers)
+    burden = sum(_burden(w, gained[w.id], t_grid) for w in workers)
+    return JitaiResult(records, list(workers), corrected, recovery, carryover_min, windows, burden)
+
+
+def _flagged(z: FloatArray, i: int) -> bool:
+    """窓 i で過緊張か（直近 SUSTAIN_WINDOWS 窓の z がすべて閾値以下。detect と同じ規則）。"""
+    if i < SUSTAIN_WINDOWS - 1:
+        return False
+    recent = z[i - SUSTAIN_WINDOWS + 1 : i + 1]
+    return bool(np.all(np.where(np.isnan(recent), False, recent <= Z_THRESHOLD)))
+
+
+def _burden(w: Worker, gained: FloatArray, t_grid: npt.NDArray[np.int64]) -> float:
+    total = 0.0
+    for e in w.episodes:
+        span = (t_grid >= e.start_min) & (t_grid < e.end_min)
+        total += float(np.clip(-e.depth - gained[span], 0.0, None).sum()) * STEP_MIN
+    return total
 
 
 def demand_cells(
@@ -228,5 +282,11 @@ def summarize(result: JitaiResult) -> dict[str, Any]:
             "corrected": detection_scores(result.workers, corrected=True).to_json(),
             "naive": detection_scores(result.workers, corrected=False).to_json(),
             "used": "corrected" if result.corrected else "naive",
+        },
+        "recovery": {
+            "enabled": result.recovery,
+            "carryover_minutes": result.carryover_min,
+            "hyperstress_windows": result.hyperstress_windows,
+            "episode_burden": round(result.episode_burden, 3),
         },
     }
