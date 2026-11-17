@@ -71,6 +71,18 @@ class SyntheticStudy:
     session_truth: dict[str, SessionTruth] = field(default_factory=dict)
 
 
+def response_amplitude(
+    p: TrueParams, leave: float, green: float, pet: float, noise: float
+) -> float:
+    """立ち上がりの到達値 A の固定効果（被験者・セッションの揺らぎを除く）。JITAI の回復でも使う。"""
+    return (
+        p.beta_leave * leave
+        + p.beta_green * green
+        + p.beta_pet * (pet - PET_REF_C)
+        + p.beta_noise * (noise - NOISE_REF_DB)
+    )
+
+
 def _environment(leave: bool, rng: np.random.Generator) -> tuple[float, float, float]:
     """(緑の量, PET, 騒音)。離脱先では緑と PET・騒音が正に相関する。"""
     if not leave:
@@ -144,10 +156,7 @@ def simulate_study(
             for r in range(design.repeats):
                 green, pet, noise = _environment(leave, rng)
                 amplitude = (
-                    p.beta_leave * leave
-                    + p.beta_green * green
-                    + p.beta_pet * (pet - PET_REF_C)
-                    + p.beta_noise * (noise - NOISE_REF_DB)
+                    response_amplitude(p, leave, green, pet, noise)
                     + u_s
                     + rng.normal(0.0, p.session_response_sd)
                 )

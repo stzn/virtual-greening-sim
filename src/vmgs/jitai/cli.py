@@ -29,6 +29,15 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     j.add_argument(
         "--no-correction", action="store_true", help="日内変動を補正せずに検知する（比較用）"
     )
+    j.add_argument(
+        "--no-recovery", action="store_true", help="介入後の回復を次の判定に反映しない（比較用）"
+    )
+    j.add_argument(
+        "--carryover-min",
+        type=float,
+        default=None,
+        help="帰った後に回復が減る時定数 [分]（既定: 30。根拠のない仮の値）",
+    )
     j.add_argument("--out", type=Path, default=DEFAULT_OUT)
 
 
@@ -115,6 +124,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         run_jitai,
         summarize,
     )
+    from vmgs.jitai.recovery import CARRYOVER_MIN, POD_GREEN
     from vmgs.jitai.workers import make_workers
     from vmgs.weather.cache import load_records
 
@@ -143,7 +153,19 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         return 1
 
     workers = make_workers(stage, args.workers, seed=args.seed)
-    result = run_jitai(workers, world, dispatch, pets.pet, corrected=not args.no_correction)
+    carryover = CARRYOVER_MIN if args.carryover_min is None else args.carryover_min
+    if carryover < 0:
+        print("--carryover-min は 0 以上にしてください", file=sys.stderr)
+        return 1
+    result = run_jitai(
+        workers,
+        world,
+        dispatch,
+        pets.pet,
+        corrected=not args.no_correction,
+        recovery=not args.no_recovery,
+        carryover_min=carryover,
+    )
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
     zone_of = demand_zones(stage, DEMAND_ZONE_M)
@@ -165,6 +187,9 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
             "route_pet_max_c": safety.ROUTE_PET_MAX_C,
             "cooldown_after_intervention_minutes": COOLDOWN_AFTER_INTERVENTION_MIN,
             "retry_after_skip_minutes": RETRY_AFTER_SKIP_MIN,
+            "recovery": not args.no_recovery,
+            "recovery_carryover_minutes": carryover,
+            "recovery_pod_green": POD_GREEN,
         },
         "records": [r.to_json() for r in result.records],
         "summary": summary,

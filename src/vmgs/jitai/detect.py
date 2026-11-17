@@ -72,7 +72,11 @@ def fit_flat(t_min: TimeArray, days: FloatArray) -> DayProfile:
 
 def detect(t_min: TimeArray, ln_hf: FloatArray, profile: DayProfile) -> BoolArray:
     """各窓で過緊張か。直近 SUSTAIN_WINDOWS 窓の z がすべて閾値以下のとき True（NaN の窓は根拠にしない）。"""
-    z = (ln_hf - profile.predict(t_min)) / profile.sd
+    return flags_from_z((ln_hf - profile.predict(t_min)) / profile.sd)
+
+
+def flags_from_z(z: FloatArray) -> BoolArray:
+    """z の列から、直近 SUSTAIN_WINDOWS 窓がすべて閾値以下の窓を True にする（NaN は根拠にしない）。"""
     low = np.where(np.isnan(z), False, z <= Z_THRESHOLD)
     flags = np.zeros(z.size, dtype=bool)
     for i in range(SUSTAIN_WINDOWS - 1, z.size):
@@ -80,10 +84,15 @@ def detect(t_min: TimeArray, ln_hf: FloatArray, profile: DayProfile) -> BoolArra
     return flags
 
 
-def worker_flags(worker: Worker, *, corrected: bool = True) -> BoolArray:
+def worker_profile(worker: Worker, *, corrected: bool = True) -> DayProfile:
     t = time_grid_min()
     fit = fit_circadian if corrected else fit_flat
-    return detect(t, worker.ln_hf, fit(t, worker.calibration_ln_hf))
+    return fit(t, worker.calibration_ln_hf)
+
+
+def worker_flags(worker: Worker, *, corrected: bool = True) -> BoolArray:
+    t = time_grid_min()
+    return detect(t, worker.ln_hf, worker_profile(worker, corrected=corrected))
 
 
 @dataclass(frozen=True)

@@ -197,3 +197,45 @@ def _w_dispatch(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixtu
 @then("配車は既定の需要を使っていない")
 def _t_no_default_demand(ctx: dict[str, Any]) -> None:
     assert "default-demand" not in ctx["dispatch_out"]["generator"]
+
+
+@when("同じ条件で、回復を反映せずに JITAI を回す")
+def _w_no_recovery(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    out = tmp_path / "jitai.norecovery.json"
+    code = cli.main(
+        [
+            "jitai",
+            "--stage",
+            str(ctx["stage"]),
+            "--dispatch",
+            str(ctx["dispatch"]),
+            "--scenario",
+            "normal",
+            "--workers",
+            "30",
+            "--seed",
+            "0",
+            "--no-recovery",
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == 0, capsys.readouterr().err
+    ctx["no_recovery"] = json.loads(out.read_text(encoding="utf-8"))
+
+
+@then("回復を反映したほうが、過緊張と判定した窓が少ない")
+def _t_fewer_windows(ctx: dict[str, Any]) -> None:
+    with_r = ctx["result"]["summary"]["recovery"]
+    without = ctx["no_recovery"]["summary"]["recovery"]
+    assert with_r["enabled"] and not without["enabled"]
+    assert with_r["hyperstress_windows"] < without["hyperstress_windows"]
+    assert with_r["episode_burden"] < without["episode_burden"]
+
+
+@then("集計には回復の前提（持ち越しの分）が記録されている")
+def _t_recovery_rules(ctx: dict[str, Any]) -> None:
+    rules = ctx["result"]["rules"]
+    assert rules["recovery"] is True
+    assert rules["recovery_carryover_minutes"] == 30
+    assert rules["recovery_pod_green"] == 0.8
