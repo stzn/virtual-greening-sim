@@ -138,6 +138,6 @@
 - [x] フェーズ 2: 役者の配車と dispatch.json（docs/dispatch.md）
 - [x] フェーズ 5: R(t) 解析基盤（docs/analysis-synthetic.md）
 - [x] フェーズ 4: JITAI の模擬（`vmgs jitai`、docs/jitai.md）。4 段階を規則で実装、合成のワーカーで回す。BDD（feature 4 件・ユニット 17 件、Red 確認済み）、変異 5 件を検出。PET 閾値は Lin & Matzarakis 2008（目的地 38℃・道中 42℃）
-  - [ ] 検知の集計を stage.json の demand へ書き戻す
+  - [x] 検知の集計を stage.json の demand へ書き戻す（`vmgs demand`。地点単位では 255 地点で需要が残らないため、徒歩圏の 400 m 区画で集計）
   - [ ] 介入後の回復（フェーズ 5 の R(t)）を次の判定に反映する
   - [ ] 閾値（z・PET・徒歩圏・席数）を実データで決め直す（倫理審査の後）

@@ -9,6 +9,7 @@ import pytest
 from vmgs.contracts import Dispatch, Pod, PodStep, StageRef
 from vmgs.fleet.stage_world import StageWorld, load_stage
 from vmgs.jitai.calendar import MIN_FREE_MIN, Meeting, free_minutes
+from vmgs.jitai.demand import demand_zones
 from vmgs.jitai.detect import (
     Z_THRESHOLD,
     detect,
@@ -236,13 +237,36 @@ def test_介入の後は一定時間判定しない_見送りの後は15分後�
     assert set(np.diff(t2)) == {15}
 
 
-def test_需要の集計は3人未満の地点時刻を除く() -> None:
-    recs = [
-        Record(
-            12 * 60 + i, f"W{i}", "skipped", "pods", "no_pod_nearby", None, None, None, None, None
-        )
-        for i in range(3)
-    ] + [Record(13 * 60, "W9", "skipped", "pods", "no_pod_nearby", None, None, None, None, None)]
-    home = {"W0": "A", "W1": "A", "W2": "A", "W9": "A"}
-    cells = demand_cells(recs, home, min_workers=3)
-    assert cells == [{"spot_id": "A", "hour": 12, "weight": 3}]
+def _rec(t_min: int, worker: str) -> Record:
+    return Record(t_min, worker, "skipped", "pods", "no_pod_nearby", None, None, None, None, None)
+
+
+def test_需要は徒歩圏の区画と時刻で数え_3人未満の区画を除き_区画内の地点に等分する() -> None:
+    # Given 区画 Z1 に地点 A・B・D（D に勤務地のワーカーはいない）、区画 Z2 に地点 C
+    zone_of = {"A": (0, 0), "B": (0, 0), "D": (0, 0), "C": (5, 5)}
+    home = {"W0": "A", "W1": "A", "W2": "B", "W9": "C"}
+    # 12 時: Z1 は 3 人（地点単位なら A が 2 人・B が 1 人で両方消える）、Z2 は 1 人
+    recs = [_rec(12 * 60, "W0"), _rec(12 * 60 + 30, "W0"), _rec(12 * 60, "W1")]
+    recs += [_rec(12 * 60 + 5, "W2"), _rec(12 * 60, "W9")]
+    # When 数える
+    cells = demand_cells(recs, home, zone_of, min_workers=3)
+    # Then Z1 の 4 件を A・B・D に等分し、1 人だけの Z2 は出さない
+    assert sorted((c["spot_id"], c["hour"]) for c in cells) == [("A", 12), ("B", 12), ("D", 12)]
+    assert sum(c["weight"] for c in cells) == pytest.approx(4)
+    assert [c["weight"] for c in cells] == pytest.approx([4 / 3] * 3)
+
+
+def test_同じ区画でも時刻が違えば別に数える() -> None:
+    zone_of = {"A": (0, 0)}
+    home = {f"W{i}": "A" for i in range(3)}
+    recs = [_rec(12 * 60, "W0"), _rec(12 * 60, "W1"), _rec(13 * 60, "W2")]
+    assert demand_cells(recs, home, zone_of, min_workers=3) == []
+
+
+def test_区画は区域の南西の角から一辺の長さで切る() -> None:
+    stage = load_stage(SAMPLE_STAGE)
+    # サンプルの 3 地点は互いに 400 m 以上離れていて、別々の区画になる
+    assert len(set(demand_zones(stage, 400.0).values())) == 3
+    # 区域より大きい区画なら 1 つにまとまる
+    assert len(set(demand_zones(stage, 5000.0).values())) == 1
+    assert set(demand_zones(stage, 400.0)) == {s.id for s in stage.spots}

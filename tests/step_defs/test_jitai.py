@@ -140,13 +140,17 @@ def _t_no_hrv(ctx: dict[str, Any]) -> None:
         assert word not in raw, word
 
 
-@then("需要の集計は地点・時刻・件数だけで、3 人未満の地点・時刻を含まない")
+@then("需要の集計は徒歩圏の区画・時刻ごとで、3 人未満の区画・時刻を含まない")
 def _t_demand(ctx: dict[str, Any]) -> None:
     demand = ctx["result"]["demand"]
     assert demand["min_workers"] == 3
+    assert demand["zone_m"] == 400
     for cell in demand["cells"]:
         assert set(cell) == {"spot_id", "hour", "weight"}
-        assert cell["weight"] >= 3
+    # 区画・時刻ごとの件数は 3 人以上のまとまりだけ（1 人 1 件以上なので件数も 3 以上）
+    for zone in demand["zones"]:
+        assert set(zone) == {"zone", "hour", "count", "spots"}
+        assert zone["count"] >= 3
 
 
 @when("JITAI の需要を舞台に書き戻す")

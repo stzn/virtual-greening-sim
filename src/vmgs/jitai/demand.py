@@ -4,12 +4,37 @@
 過緊張の判定点を地点・時刻ごとに数えた集計値で配車する。集計値だけを扱い、個人の値は入らない。
 """
 
+import math
 from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
 
 from vmgs.contracts import DemandHour, Stage
+from vmgs.fleet.stage_world import EARTH_RADIUS_M
+from vmgs.jitai.pods import WALK_RADIUS_M
+
+# 需要を数える区画の一辺。徒歩圏（片道 400 m）に合わせる。地点×時刻では細かすぎて、
+# 少人数（合成 30 人、実際の研究の参加者も少ない）だと 3 人未満の規則でほぼすべて消えるため、
+# 区画×時刻で数えてから消し、残った件数を区画内の地点に等分する。
+DEMAND_ZONE_M = WALK_RADIUS_M
+
+Zone = tuple[int, int]
+
+
+def demand_zones(stage: Stage, zone_m: float = DEMAND_ZONE_M) -> dict[str, Zone]:
+    """地点 ID → 区画（区域の南西の角から、東西・南北に zone_m ごとに切った升目の番号）。"""
+    west, south, _east, north = stage.area.bbox
+    # 区域は数 km なので、区域の中央の緯度で平面に近似する
+    m_per_deg_lat = math.radians(1.0) * EARTH_RADIUS_M
+    m_per_deg_lon = m_per_deg_lat * math.cos(math.radians((south + north) / 2))
+    return {
+        s.id: (
+            math.floor((s.lon - west) * m_per_deg_lon / zone_m),
+            math.floor((s.lat - south) * m_per_deg_lat / zone_m),
+        )
+        for s in stage.spots
+    }
 
 
 def apply_demand(stage: Stage, jitai_out: Mapping[str, Any]) -> Stage:

@@ -105,11 +105,13 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     from vmgs.fleet.stage_world import StageWorld, load_stage
     from vmgs.jitai import detect, pods, safety
     from vmgs.jitai.calendar import MIN_FREE_MIN
+    from vmgs.jitai.demand import DEMAND_ZONE_M, demand_zones
     from vmgs.jitai.engine import (
         COOLDOWN_AFTER_INTERVENTION_MIN,
         DEMAND_MIN_WORKERS,
         RETRY_AFTER_SKIP_MIN,
         demand_cells,
+        demand_zone_counts,
         run_jitai,
         summarize,
     )
@@ -144,6 +146,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     result = run_jitai(workers, world, dispatch, pets.pet, corrected=not args.no_correction)
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
+    zone_of = demand_zones(stage, DEMAND_ZONE_M)
     out = {
         "generator": f"{_git_version()} jitai",
         "stage_ref": {"area_id": stage.area.id, "date": stage.date.isoformat()},
@@ -166,9 +169,22 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         "records": [r.to_json() for r in result.records],
         "summary": summary,
         "demand": {
-            "note": "過緊張の判定点を、勤務地に近い地点・時刻ごとに数えた集計値",
+            "note": (
+                "過緊張の判定点を、勤務地に近い地点の区画（一辺 zone_m）・時刻ごとに数え、"
+                "min_workers 人以上の区画・時刻だけを、区画内の地点に等分した集計値"
+            ),
             "min_workers": DEMAND_MIN_WORKERS,
-            "cells": demand_cells(result.records, home, DEMAND_MIN_WORKERS),
+            "zone_m": DEMAND_ZONE_M,
+            "zones": [
+                {
+                    "zone": f"{z['zone'][0]},{z['zone'][1]}",
+                    "hour": z["hour"],
+                    "count": z["count"],
+                    "spots": len(z["spot_ids"]),
+                }
+                for z in demand_zone_counts(result.records, home, zone_of, DEMAND_MIN_WORKERS)
+            ],
+            "cells": demand_cells(result.records, home, zone_of, DEMAND_MIN_WORKERS),
         },
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
