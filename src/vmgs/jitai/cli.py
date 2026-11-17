@@ -1,0 +1,145 @@
+"""`vmgs jitai`: 舞台の stage.json と配車の dispatch.json から、合成のワーカーで JITAI を回す。
+
+例: uv run vmgs jitai --stage contracts/fixtures/stage.sample.json \\
+        --dispatch contracts/fixtures/dispatch.sample.json --scenario normal --out runs/jitai.json
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+DEFAULT_OUT = Path("runs/jitai.json")
+
+
+def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
+    j = sub.add_parser(
+        "jitai", help="合成のワーカーで JITAI（検知→予定→ポッド→PET）を回し、介入の記録を書き出す"
+    )
+    j.add_argument("--stage", type=Path, required=True, help="舞台の stage.json")
+    j.add_argument("--dispatch", type=Path, required=True, help="配車の dispatch.json")
+    j.add_argument(
+        "--scenario",
+        choices=["heatwave", "normal", "rainy"],
+        help="PET の計算に使う気象（既定: dispatch.json の weather_scenario）",
+    )
+    j.add_argument("--workers", type=int, default=30, help="合成のワーカーの人数")
+    j.add_argument("--seed", type=int, default=0)
+    j.add_argument(
+        "--no-correction", action="store_true", help="日内変動を補正せずに検知する（比較用）"
+    )
+    j.add_argument("--out", type=Path, default=DEFAULT_OUT)
+
+
+def _markdown(summary: dict[str, Any]) -> str:
+    rate = summary["intervention_rate"]
+    head = (
+        f"判定 {summary['decisions']} 件・介入 {summary['interventions']} 件"
+        f"（介入率 {rate:.1%}、介入したワーカー {summary['workers_with_intervention']}"
+        f"/{summary['workers']} 人）"
+    )
+    lines = [
+        head,
+        "",
+        "| 段階 | 理由 | 見送り |",
+        "| --- | --- | --- |",
+    ]
+    from vmgs.jitai.engine import REASONS
+
+    for reason, stage in REASONS.items():
+        lines.append(f"| {stage} | {reason} | {summary['skipped_by_reason'][reason]} |")
+    d = summary["detection"]
+    lines += [
+        "",
+        "| 検知 | 感度 | エピソード外の検知（窓） | うち 13 時以降 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for name in ("corrected", "naive"):
+        s = d[name]
+        lines.append(
+            f"| {name} | {s['detected_episodes']}/{s['episodes']} "
+            f"| {s['false_alarm_windows']} | {s['false_alarm_windows_afternoon']} |"
+        )
+    return "\n".join(lines)
+
+
+def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
+    # PET の計算（pythermalcomfort / numba）は読み込みが重いので、このコマンドでだけ読み込む
+    from vmgs.contracts import Dispatch, dispatch_errors_against_stage
+    from vmgs.fleet.cli import _git_version
+    from vmgs.fleet.comfort import PetTable
+    from vmgs.fleet.stage_world import StageWorld, load_stage
+    from vmgs.jitai import detect, pods, safety
+    from vmgs.jitai.calendar import MIN_FREE_MIN
+    from vmgs.jitai.engine import (
+        COOLDOWN_AFTER_INTERVENTION_MIN,
+        DEMAND_MIN_WORKERS,
+        RETRY_AFTER_SKIP_MIN,
+        demand_cells,
+        run_jitai,
+        summarize,
+    )
+    from vmgs.jitai.workers import make_workers
+    from vmgs.weather.cache import load_records
+
+    stage = load_stage(args.stage)
+    dispatch = Dispatch.model_validate_json(args.dispatch.read_text(encoding="utf-8"))
+    errors = dispatch_errors_against_stage(dispatch, stage)
+    if errors:
+        print("配車が舞台と食い違います:", *errors, sep="\n  ", file=sys.stderr)
+        return 1
+    scenario = args.scenario or dispatch.weather_scenario
+    weather_path = weather_dir / f"{scenario}.json"
+    if not weather_path.exists():
+        print(f"シナリオが見つかりません: {weather_path}", file=sys.stderr)
+        return 1
+    if args.workers < 1:
+        print("--workers は 1 以上にしてください", file=sys.stderr)
+        return 1
+    world = StageWorld.from_stage(stage)
+    weather = {r.time.hour: r for r in load_records(weather_path)}
+    pets = PetTable(world, weather)
+
+    # 判定は 8〜19 時（帰りが 19 時台にかかる）。PET に要る時刻が気象と舞台にそろっているか
+    missing = sorted(set(range(8, 20)) - (set(weather) & world.hours))
+    if missing:
+        print(f"気象か舞台に、判定に要る時刻がありません: {missing}", file=sys.stderr)
+        return 1
+
+    workers = make_workers(stage, args.workers, seed=args.seed)
+    result = run_jitai(workers, world, dispatch, pets.pet, corrected=not args.no_correction)
+    summary = summarize(result)
+    home = {w.id: w.home_spot_id for w in workers}
+    out = {
+        "generator": f"{_git_version()} jitai",
+        "stage_ref": {"area_id": stage.area.id, "date": stage.date.isoformat()},
+        "dispatch_generator": dispatch.generator,
+        "weather_scenario": scenario,
+        "seed": args.seed,
+        "rules": {
+            "z_threshold": detect.Z_THRESHOLD,
+            "sustain_minutes": detect.SUSTAIN_WINDOWS * 5,
+            "circadian_correction": not args.no_correction,
+            "min_free_minutes": MIN_FREE_MIN,
+            "walk_radius_m": pods.WALK_RADIUS_M,
+            "dwell_minutes": pods.DWELL_MIN,
+            "pod_seats": pods.POD_SEATS,
+            "destination_pet_max_c": safety.DEST_PET_MAX_C,
+            "route_pet_max_c": safety.ROUTE_PET_MAX_C,
+            "cooldown_after_intervention_minutes": COOLDOWN_AFTER_INTERVENTION_MIN,
+            "retry_after_skip_minutes": RETRY_AFTER_SKIP_MIN,
+        },
+        "records": [r.to_json() for r in result.records],
+        "summary": summary,
+        "demand": {
+            "note": "過緊張の判定点を、勤務地に近い地点・時刻ごとに数えた集計値",
+            "min_workers": DEMAND_MIN_WORKERS,
+            "cells": demand_cells(result.records, home, DEMAND_MIN_WORKERS),
+        },
+    }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"書き出した: {args.out}（ワーカー {args.workers} 人・気象 {scenario}）")
+    print(_markdown(summary))
+    return 0
