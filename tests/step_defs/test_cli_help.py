@@ -7,7 +7,7 @@ from vmgs.cli import main
 
 scenarios("cli/help.feature")
 
-COMMANDS = ["turn", "run", "telemetry", "experiment", "metrics", "compare"]
+COMMANDS = ["turn", "run", "telemetry", "experiment", "metrics", "compare", "dispatch"]
 
 
 @pytest.fixture
