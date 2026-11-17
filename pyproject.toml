@@ -20,6 +20,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
+    "pythermalcomfort>=4.8.1,<5",
     "python-dotenv>=1.2.4",
 ]
 
@@ -54,3 +55,8 @@ strict = true
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+# pythermalcomfort は型情報（py.typed）を持たない
+module = ["pythermalcomfort", "pythermalcomfort.*"]
+ignore_missing_imports = true
