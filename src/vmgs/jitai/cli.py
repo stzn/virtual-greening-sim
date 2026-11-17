@@ -38,12 +38,27 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         default=None,
         help="帰った後に回復が減る時定数 [分]（既定: 30。根拠のない仮の値）",
     )
+    j.add_argument(
+        "--messages", action="store_true", help="介入した記録に通知文（message）を付ける"
+    )
+    j.add_argument(
+        "--llm",
+        type=_parse_llm,
+        metavar="ollama:<model>",
+        help="通知文をローカルの ollama で言い換える（--messages を含む。検査に外れたらテンプレート）",
+    )
     j.add_argument("--out", type=Path, default=DEFAULT_OUT)
     j.add_argument(
         "--summary-out",
         type=Path,
         help="舞台に渡す JITAI の集計（契約 v1 の jitai-summary.json）の出力先",
     )
+
+
+def _parse_llm(spec: str) -> str:
+    from vmgs.jitai.message import parse_llm
+
+    return parse_llm(spec)
 
 
 def add_demand_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
@@ -217,6 +232,21 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
             "cells": demand_cells(result.records, home, zone_of, DEMAND_MIN_WORKERS),
         },
     }
+    if args.messages or args.llm:
+        from vmgs.jitai import message
+
+        paraphrase = message.ollama_paraphraser(args.llm) if args.llm else None
+        fallbacks = message.attach_messages(
+            out["records"],
+            result.records,
+            {w.id: w.meetings for w in workers},
+            {s.id: s.name for s in stage.spots},
+            paraphrase,
+        )
+        out["messages"] = {
+            "llm": f"ollama:{args.llm}" if args.llm else None,
+            "fallbacks": fallbacks,
+        }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"書き出した: {args.out}（ワーカー {args.workers} 人・気象 {scenario}）")
