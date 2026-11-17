@@ -10,8 +10,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from vmgs.contracts import DemandHour, Stage
+from vmgs.contracts import DemandHour, JitaiSummary, Stage
 from vmgs.fleet.stage_world import EARTH_RADIUS_M
+from vmgs.jitai.engine import DEMAND_MIN_WORKERS, JitaiResult, zone_hour_summary
 from vmgs.jitai.pods import WALK_RADIUS_M
 
 # 需要を数える区画の一辺。徒歩圏（片道 400 m）に合わせる。地点×時刻では細かすぎて、
@@ -72,3 +73,34 @@ def apply_demand(stage: Stage, jitai_out: Mapping[str, Any]) -> Stage:
         return Stage.model_validate(data)
     except ValidationError as e:
         raise ValueError(f"書き戻した舞台が契約に合わない: {e}") from e
+
+
+def jitai_summary(
+    stage: Stage,
+    result: JitaiResult,
+    home_spot: Mapping[str, str],
+    scenario: str,
+    generator: str,
+    zone_m: float = DEMAND_ZONE_M,
+    min_workers: int = DEMAND_MIN_WORKERS,
+) -> JitaiSummary:
+    """舞台に渡す JITAI の集計（契約 v1）。区画・時刻ごとの件数だけで、個人の記録は入れない。"""
+    west, south, _east, _north = stage.area.bbox
+    zones = zone_hour_summary(result.records, home_spot, demand_zones(stage, zone_m), min_workers)
+    return JitaiSummary.model_validate(
+        {
+            "schema_version": "1",
+            "stage_ref": {"area_id": stage.area.id, "date": stage.date},
+            "generator": generator,
+            "weather_scenario": scenario,
+            "workers": len(result.workers),
+            "min_workers": min_workers,
+            "grid": {"origin_lon": west, "origin_lat": south, "zone_m": zone_m},
+            "totals": {
+                "decisions": len(result.records),
+                "interventions": sum(r.outcome == "intervened" for r in result.records),
+            },
+            "recovery": {"enabled": result.recovery, "carryover_minutes": result.carryover_min},
+            "zones": zones,
+        }
+    )

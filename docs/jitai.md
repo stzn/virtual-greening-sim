@@ -198,6 +198,29 @@ uv run vmgs dispatch --stage runs/stage.demand.json --scenario normal --out runs
 - ただし、合成のワーカーの勤務地と過緊張の起き方は seed が違っても同じ分布から作っているので、「需要の分布が変わらない」前提の上での結果です。
 - 猛暑では、道中の PET による見送りが多いため、介入率そのものは低いままです。
 
+## 全体を 1 コマンドで回す（`vmgs loop`）
+
+配車 → JITAI → 需要の書き戻し を、`--rounds` の回数だけ繰り返します。各段階は `vmgs dispatch`・`vmgs jitai`・`vmgs demand` と同じ関数を呼びます。
+
+```bash
+uv run vmgs loop --stage stage.json --scenario normal --workers 300 --rounds 1 --out-dir runs/loop
+```
+
+- 周 0 は入力の舞台のまま配車します（需要が空なら一様の需要）。周 r の JITAI の集計を書き戻したものが、周 r+1 の舞台です。
+- `--out-dir` に、周ごとの `stage.rN.json`・`dispatch.rN.json`・`jitai.rN.json`・`jitai-summary.rN.json` と、表（`summary.md`・`summary.json`）を書きます。
+- `jitai-summary.rN.json` は、舞台に渡す集計です（契約 v1 の `jitai-summary.schema.json`。`vmgs jitai --summary-out` でも書き出せる）。区画（400 m）× 時刻ごとの判定・介入・段階別の見送りの件数だけで、3 人未満の区画・時刻は入れません。個人の記録・ID も入れません。
+
+### 結果（舞台の 255 地点・建物だけの遮蔽、ワーカー 300 人・seed 0、回復あり・持ち越し 30 分）
+
+| 気象 | 周 | 需要 | 需要の地点 | 判定 | 介入 | 介入率 | 過緊張の窓 | エピソードの負担 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| normal | 0 | 一様 | — | 834 | 77 | 9.2% | 2220 | 17876 |
+| normal | 1 | 集計 | 238 | 762 | 131 | 17.2% | 2097 | 17391 |
+| heatwave | 0 | 一様 | — | 939 | 5 | 0.5% | 2385 | 18555 |
+| heatwave | 1 | 集計 | 238 | 912 | 26 | 2.9% | 2351 | 18381 |
+
+回復を反映しても、集計した需要で配車し直すと介入率がおよそ 2 倍（normal 9.2% → 17.2%）になる点は、回復を入れる前の結果と同じです。過緊張の窓は 5.5%（normal）減りました。
+
 ## 未決事項
 - 閾値（z −2.0・15 分、PET 38/42℃、徒歩 400 m、席 2）は仮の値。実データ（倫理審査の後）で決め直す。
 - 需要の区画の大きさ（400 m）と、3 人未満を消す閾値は仮の値。参加者の人数が決まったら見直す。

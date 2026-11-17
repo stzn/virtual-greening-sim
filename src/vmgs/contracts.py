@@ -2,6 +2,7 @@
 
 - stage.json   : 舞台 → 役者。候補地点ごとの、時間別の日射遮蔽率・天空率・緑の文脈・需要
 - dispatch.json: 役者 → 舞台。ポッドの時刻別の位置・行動と、地点ごとの快適度（PET）
+- jitai-summary.json: 役者 → 舞台。JITAI の判定・介入・見送りを、徒歩圏の区画 × 時刻で数えた集計値
 
 正本はこのモジュール。`uv run python -m vmgs.contracts` で contracts/*.schema.json を書き出し、
 tokyo-green-simulator の contracts/ へ同じファイルを写す（両リポジトリのテストが同じサンプルで検証する）。
@@ -15,7 +16,11 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 SCHEMA_VERSION = "1"
-SCHEMA_FILES = {"stage": "stage.schema.json", "dispatch": "dispatch.schema.json"}
+SCHEMA_FILES = {
+    "stage": "stage.schema.json",
+    "dispatch": "dispatch.schema.json",
+    "jitai_summary": "jitai-summary.schema.json",
+}
 
 Hour = Annotated[int, Field(ge=0, le=23)]
 Fraction = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -53,7 +58,9 @@ class GreenContext(_Strict):
 
 class SpotHour(_Strict):
     hour: Hour
-    shade_fraction: Fraction = Field(description="建物による日射遮蔽率（0=日向、1=完全な日影）")
+    shade_fraction: Fraction = Field(
+        description="建物と街路樹の樹冠による日射遮蔽率（0=日向、1=完全な日影）"
+    )
 
 
 class DemandHour(_Strict):
@@ -172,8 +179,83 @@ def dispatch_errors_against_stage(dispatch: Dispatch, stage: Stage) -> list[str]
     return errors
 
 
+class ZoneGrid(_Strict):
+    """区画の切り方。区域の南西の角を原点に、東西・南北に zone_m ごとの升目（番号は 0 から）。"""
+
+    origin_lon: Lon
+    origin_lat: Lat
+    zone_m: float = Field(gt=0, description="区画の一辺 [m]（徒歩圏に合わせる）")
+
+
+class ZoneHour(_Strict):
+    zone: tuple[int, int] = Field(description="区画の番号 [東西, 南北]")
+    hour: Hour
+    decisions: int = Field(ge=1, description="判定の件数（過緊張を検知した判定点）")
+    interventions: int = Field(ge=0)
+    skipped_calendar: int = Field(ge=0, description="予定の段階で見送った件数")
+    skipped_pods: int = Field(ge=0, description="ポッドの段階で見送った件数")
+    skipped_pet: int = Field(ge=0, description="PET の段階で見送った件数")
+
+    @model_validator(mode="after")
+    def _sum(self) -> "ZoneHour":
+        parts = self.interventions + self.skipped_calendar + self.skipped_pods + self.skipped_pet
+        if parts != self.decisions:
+            raise ValueError(f"判定 {self.decisions} 件が、介入と見送りの和 {parts} 件と違う")
+        return self
+
+
+class JitaiTotals(_Strict):
+    decisions: int = Field(ge=0)
+    interventions: int = Field(ge=0)
+
+
+class RecoveryInfo(_Strict):
+    enabled: bool
+    carryover_minutes: float = Field(ge=0)
+
+
+class JitaiSummary(_Strict):
+    """JITAI の集計（役者 → 舞台）。min_workers 人未満の区画・時刻は入れない。個人の記録は持たない。"""
+
+    schema_version: Literal["1"]
+    stage_ref: StageRef
+    generator: str
+    weather_scenario: str
+    workers: int = Field(ge=1, description="合成のワーカーの人数")
+    min_workers: int = Field(ge=1)
+    grid: ZoneGrid
+    totals: JitaiTotals
+    recovery: RecoveryInfo
+    zones: list[ZoneHour] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _zones_unique(self) -> "JitaiSummary":
+        _unique([(z.zone, z.hour) for z in self.zones], "区画と時刻")
+        return self
+
+
+def jitai_summary_errors_against_stage(summary: JitaiSummary, stage: Stage) -> list[str]:
+    """JITAI の集計が舞台と食い違う点を挙げる（区域・日付・区画の原点）。"""
+    errors: list[str] = []
+    if summary.stage_ref.area_id != stage.area.id:
+        errors.append(f"区域が違う: 集計 {summary.stage_ref.area_id}、舞台 {stage.area.id}")
+    if summary.stage_ref.date != stage.date:
+        errors.append(f"日付が違う: 集計 {summary.stage_ref.date}、舞台 {stage.date}")
+    west, south, _east, _north = stage.area.bbox
+    if (summary.grid.origin_lon, summary.grid.origin_lat) != (west, south):
+        errors.append(
+            f"区画の原点が区域の南西の角と違う: 集計 ({summary.grid.origin_lon}, "
+            f"{summary.grid.origin_lat})、舞台 ({west}, {south})"
+        )
+    return errors
+
+
 def generated_schemas() -> dict[str, dict[str, Any]]:
-    return {"stage": Stage.model_json_schema(), "dispatch": Dispatch.model_json_schema()}
+    return {
+        "stage": Stage.model_json_schema(),
+        "dispatch": Dispatch.model_json_schema(),
+        "jitai_summary": JitaiSummary.model_json_schema(),
+    }
 
 
 def write_schemas(out_dir: Path) -> list[Path]:
