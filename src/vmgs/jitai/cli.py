@@ -45,6 +45,15 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
     j.add_argument(
+        "--min-workers",
+        type=int,
+        default=3,
+        help="需要の集計で、これ未満の人数の区画・時刻は区画として出さない（既定 3。比べるとき）",
+    )
+    j.add_argument(
+        "--zone-m", type=float, default=400.0, help="需要を集計する区画の一辺 [m]（既定 400）"
+    )
+    j.add_argument(
         "--messages", action="store_true", help="介入した記録に通知文（message）を付ける"
     )
     j.add_argument(
@@ -141,10 +150,9 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     from vmgs.fleet.stage_world import StageWorld, load_stage
     from vmgs.jitai import detect, pods, safety
     from vmgs.jitai.calendar import MIN_FREE_MIN
-    from vmgs.jitai.demand import DEMAND_ZONE_M, demand_zones
+    from vmgs.jitai.demand import demand_zones
     from vmgs.jitai.engine import (
         COOLDOWN_AFTER_INTERVENTION_MIN,
-        DEMAND_MIN_WORKERS,
         RETRY_AFTER_SKIP_MIN,
         demand_cells,
         demand_residual_counts,
@@ -170,6 +178,11 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         return 1
     if args.workers < 1:
         print("--workers は 1 以上にしてください", file=sys.stderr)
+        return 1
+    min_workers: int = args.min_workers
+    zone_m: float = args.zone_m
+    if min_workers < 1 or zone_m <= 0:
+        print("--min-workers は 1 以上、--zone-m は 0 より大きくしてください", file=sys.stderr)
         return 1
     world = StageWorld.from_stage(stage)
     weather = {r.time.hour: r for r in load_records(weather_path)}
@@ -199,7 +212,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     )
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
-    zone_of = demand_zones(stage, DEMAND_ZONE_M)
+    zone_of = demand_zones(stage, zone_m)
     # 需要は、介入しない場合の判定点のうち予定の空いたもので数える（配車の結果に左右されず、
     # 予定で見送る時刻にポッドを寄せないように）
     latent = latent_decisions(workers, corrected=not args.no_correction, require_free=True)
@@ -238,8 +251,8 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
                 "以上なら全地点に等分して足す"
             ),
             "basis": "no_intervention_free_time",
-            "min_workers": DEMAND_MIN_WORKERS,
-            "zone_m": DEMAND_ZONE_M,
+            "min_workers": min_workers,
+            "zone_m": zone_m,
             "zones": [
                 {
                     "zone": f"{z['zone'][0]},{z['zone'][1]}",
@@ -247,13 +260,13 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
                     "count": z["count"],
                     "spots": len(z["spot_ids"]),
                 }
-                for z in demand_zone_counts(latent, home, zone_of, DEMAND_MIN_WORKERS)
+                for z in demand_zone_counts(latent, home, zone_of, min_workers)
             ],
             "residual": [
                 {"hour": r["hour"], "count": r["count"], "spots": r["spots"]}
-                for r in demand_residual_counts(latent, home, zone_of, DEMAND_MIN_WORKERS)
+                for r in demand_residual_counts(latent, home, zone_of, min_workers)
             ],
-            "cells": demand_cells(latent, home, zone_of, DEMAND_MIN_WORKERS),
+            "cells": demand_cells(latent, home, zone_of, min_workers),
         },
     }
     if args.messages or args.llm:
@@ -277,7 +290,9 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     if args.summary_out is not None:
         from vmgs.jitai.demand import jitai_summary
 
-        js = jitai_summary(stage, result, home, scenario, f"{_git_version()} jitai")
+        js = jitai_summary(
+            stage, result, home, scenario, f"{_git_version()} jitai", zone_m, min_workers
+        )
         args.summary_out.parent.mkdir(parents=True, exist_ok=True)
         args.summary_out.write_text(js.model_dump_json(indent=1) + "\n", encoding="utf-8")
         print(f"書き出した: {args.summary_out}（区画・時刻 {len(js.zones)} 件）")

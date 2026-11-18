@@ -38,6 +38,15 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
         default=True,
         help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
+    lp.add_argument(
+        "--min-workers",
+        type=int,
+        default=3,
+        help="需要の集計で、これ未満の人数の区画・時刻は区画として出さない（既定 3。比べるとき）",
+    )
+    lp.add_argument(
+        "--zone-m", type=float, default=400.0, help="需要を集計する区画の一辺 [m]（既定 400）"
+    )
     lp.add_argument("--carryover-min", type=float, default=None, help="回復の持ち越しの時定数 [分]")
     lp.add_argument("--out-dir", type=Path, required=True)
 
@@ -117,6 +126,8 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 no_recovery=args.no_recovery,
                 carryover_min=args.carryover_min,
                 rain_cover=args.rain_cover,
+                min_workers=args.min_workers,
+                zone_m=args.zone_m,
                 out=jitai_path,
                 summary_out=summary_path,
                 messages=False,
@@ -163,6 +174,8 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
         "recovery": not args.no_recovery,
         "carryover_min": args.carryover_min,
         "rain_cover": args.rain_cover,
+        "min_workers": args.min_workers,
+        "zone_m": args.zone_m,
         "rounds": rows,
     }
     (out / "summary.json").write_text(

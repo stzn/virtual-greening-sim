@@ -86,6 +86,43 @@ def _w_run_no_cover(
     _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, ["--no-rain-cover"])
 
 
+@when(
+    parsers.parse(
+        '気象 "{scenario}" でワーカー {n:d} 人の JITAI を、人数のしきい値 {k:d}・区画 {m:d} m で回す'
+    )
+)
+def _w_run_anonymity(
+    ctx: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: str,
+    n: int,
+    k: int,
+    m: int,
+) -> None:
+    ctx["summary_out"] = tmp_path / "jitai-summary.json"
+    extra = ["--min-workers", str(k), "--zone-m", str(m), "--summary-out", str(ctx["summary_out"])]
+    _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, extra)
+
+
+@then(
+    parsers.parse(
+        "需要の集計は人数のしきい値 {k:d}・区画 {m:d} m で、区画・時刻の件数は {k2:d} 以上"
+    )
+)
+def _t_demand_options(ctx: dict[str, Any], k: int, m: int, k2: int) -> None:
+    demand = ctx["result"]["demand"]
+    assert demand["min_workers"] == k and demand["zone_m"] == m
+    assert demand["zones"] and all(z["count"] >= k2 for z in demand["zones"])
+
+
+@then(parsers.parse("地図アプリに渡す集計も人数のしきい値 {k:d}・区画 {m:d} m になる"))
+def _t_summary_options(ctx: dict[str, Any], k: int, m: int) -> None:
+    js = json.loads(ctx["summary_out"].read_text(encoding="utf-8"))
+    assert js["min_workers"] == k and js["grid"]["zone_m"] == m
+
+
 @when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を通知文つきで回す'))
 def _w_run_messages(
     ctx: dict[str, Any],
