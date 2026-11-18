@@ -117,8 +117,8 @@ def _t_fixed_point(ctx: dict[str, Any]) -> None:
     assert r1 == r2
 
 
-@then("JITAI の需要は介入しない場合の判定点で数えたと記録される")
+@then("JITAI の需要は介入しない場合の、予定の空いた判定点で数えたと記録される")
 def _t_basis(ctx: dict[str, Any]) -> None:
     for r in range(ctx["rounds"] + 1):
         jitai = json.loads((ctx["out"] / f"jitai.r{r}.json").read_text(encoding="utf-8"))
-        assert jitai["demand"]["basis"] == "no_intervention"
+        assert jitai["demand"]["basis"] == "no_intervention_free_time"
