@@ -24,9 +24,11 @@ uv run vmgs dispatch --stage contracts/fixtures/stage.sample.json --scenario hea
 | 方式 | 移動 | 散水 |
 | --- | --- | --- |
 | `greedy` | 毎時、貪欲法で配車し直す | 世話の規則（下記） |
-| `coverage` | greedy と同じ手順で、価値を「徒歩圏で覆える需要」に替える（下記） | 世話の規則（下記） |
+| `coverage`（既定） | greedy と同じ手順で、価値を「徒歩圏で覆える需要」に替える（下記） | 世話の規則（下記） |
 | `fixed` | 初期配置のまま | 世話の規則（退避以外） |
 | `none` | 初期配置のまま | しない（何もしない） |
+
+`vmgs dispatch`・`vmgs loop`・`vmgs sweep` の既定は coverage です（`--policy greedy`・`--policies greedy` で今までの方式も選べる）。coverage・3 台は greedy・8 台と同じ介入率で、heatwave でも介入率が高いためです（[jitai.md](jitai.md) の `vmgs sweep` の結果）。
 
 初期配置は、1 日の価値（Σ 需要 × ポッドによる PET の低下）が大きい地点から、容量を守って順に置きます（greedy・fixed・none で共通。`--compare` のときは coverage もこの置き方から始めます）。coverage だけで配車するときは、覆える 1 日の需要が最も増える地点から 1 台ずつ置きます。
 

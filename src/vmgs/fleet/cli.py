@@ -20,7 +20,12 @@ def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser
     d.add_argument("--stage", type=Path, required=True, help="舞台の stage.json")
     d.add_argument("--scenario", default="heatwave", choices=["heatwave", "normal", "rainy"])
     d.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    d.add_argument("--policy", default="greedy", choices=["greedy", "coverage", "fixed", "none"])
+    d.add_argument(
+        "--policy",
+        default="coverage",
+        choices=["greedy", "coverage", "fixed", "none"],
+        help="配車の方式（既定 coverage: 徒歩圏で覆える需要を見る）",
+    )
     d.add_argument("--pods", type=int, default=3, help="ポッドの台数")
     d.add_argument("--max-move-m", type=float, help="1 時間に動ける距離 [m]（既定: 1000）")
     d.add_argument(
