@@ -186,6 +186,11 @@ def _t_no_interventions(ctx: dict[str, Any]) -> None:
     assert ctx["result"]["summary"]["interventions"] == 0
 
 
+@then("記録の規則に、雨のしきい値 1 mm/h がある")
+def _t_rain_rule(ctx: dict[str, Any]) -> None:
+    assert ctx["result"]["rules"]["rain_max_mm_per_h"] == 1.0
+
+
 @then("出力に HRV の値が含まれない")
 def _t_no_hrv(ctx: dict[str, Any]) -> None:
     raw = ctx["raw"].lower()

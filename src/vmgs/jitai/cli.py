@@ -188,6 +188,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         corrected=not args.no_correction,
         recovery=not args.no_recovery,
         carryover_min=carryover,
+        rain_mm={h: r.precipitation_mm for h, r in weather.items()},
     )
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
@@ -211,6 +212,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
             "pod_seats": pods.POD_SEATS,
             "destination_pet_max_c": safety.DEST_PET_MAX_C,
             "route_pet_max_c": safety.ROUTE_PET_MAX_C,
+            "rain_max_mm_per_h": safety.RAIN_MAX_MM_H,
             "cooldown_after_intervention_minutes": COOLDOWN_AFTER_INTERVENTION_MIN,
             "retry_after_skip_minutes": RETRY_AFTER_SKIP_MIN,
             "recovery": not args.no_recovery,

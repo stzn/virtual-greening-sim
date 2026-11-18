@@ -198,7 +198,7 @@ class ZoneHour(_Strict):
     interventions: int = Field(ge=0)
     skipped_calendar: int = Field(ge=0, description="予定の段階で見送った件数")
     skipped_pods: int = Field(ge=0, description="ポッドの段階で見送った件数")
-    skipped_pet: int = Field(ge=0, description="PET の段階で見送った件数")
+    skipped_pet: int = Field(ge=0, description="天候（雨・PET）の段階で見送った件数")
 
     @model_validator(mode="after")
     def _sum(self) -> "ZoneHour":

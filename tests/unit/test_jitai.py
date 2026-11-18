@@ -25,7 +25,7 @@ from vmgs.jitai.engine import (
     run_jitai,
 )
 from vmgs.jitai.pods import POD_SEATS, WALK_RADIUS_M, Occupancy, PodSchedule
-from vmgs.jitai.safety import DEST_PET_MAX_C, ROUTE_PET_MAX_C, pet_check
+from vmgs.jitai.safety import DEST_PET_MAX_C, RAIN_MAX_MM_H, ROUTE_PET_MAX_C, pet_check, rain_check
 from vmgs.jitai.workers import (
     Episode,
     Worker,
@@ -236,6 +236,49 @@ def test_介入の後は一定時間判定しない_見送りの後は15分後�
         late = r.time_min > 19 * 60 - MIN_FREE_MIN
         assert r.reason == ("short_gap" if late else "pet_destination")
     assert set(np.diff(t2)) == {15}
+
+
+def test_雨は行きから帰りまでの各時の最大の降水量で見る() -> None:
+    rain = {9: 0.2, 10: 3.0, 11: 0.0}
+    assert rain_check(rain, [9]) == 0.2
+    assert rain_check(rain, [9, 10]) == 3.0
+    # 気象に無い時刻は雨なしとみなす
+    assert rain_check(rain, [20]) == 0.0
+
+
+def test_雨の閾値は傘が要る1mm毎時() -> None:
+    assert RAIN_MAX_MM_H == 1.0
+
+
+def _rain_run(rain: dict[int, float] | None):  # type: ignore[no-untyped-def]
+    # 勤務地にポッドが終日いて、PET は低い（暑さでは見送らない）
+    world = StageWorld.from_stage(load_stage(SAMPLE_STAGE))
+    s1 = world.stage_spot("OTM-001")
+    w = _one_worker(s1.lat, s1.lon)
+    sched = _dispatch({"P1": [(h, "OTM-001") for h in range(24)]})
+    return run_jitai([w], world, sched, _const_pet(30.0, 30.0), rain_mm=rain)
+
+
+def test_雨が1mm毎時以上の時刻は_天候の段階で理由rainとして見送り_15分後に再判定する() -> None:
+    # Given 9 時だけ 1 mm/h の雨
+    result = _rain_run({h: (1.0 if h == 9 else 0.0) for h in range(24)})
+    rained = [r for r in result.records if r.reason == "rain"]
+    # Then 9 時台の判定は天候の段階（契約の pet）で見送り、ポッドの情報は残す
+    assert rained and all(r.time_min // 60 == 9 for r in rained)
+    assert all(r.stage == "pet" and r.pod_id == "P1" for r in rained)
+    assert set(np.diff([r.time_min for r in rained])) <= {15}
+    # 雨が止んだ後は介入する
+    assert any(r.outcome == "intervened" for r in result.records)
+
+
+def test_雨が1mm毎時未満なら見送らない() -> None:
+    result = _rain_run({h: 0.9 for h in range(24)})
+    assert result.records[0].outcome == "intervened"
+    assert not any(r.reason == "rain" for r in result.records)
+
+
+def test_雨の気象を渡さなければ雨を見ない() -> None:
+    assert not any(r.reason == "rain" for r in _rain_run(None).records)
 
 
 def _rec(t_min: int, worker: str) -> Record:
