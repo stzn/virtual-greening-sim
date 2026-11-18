@@ -74,6 +74,8 @@ class FleetParams:
     # JITAI（vmgs.jitai.pods.WALK_RADIUS_M・vmgs.jitai.safety.DEST_PET_MAX_C）と同じ値にする
     walk_radius_m: float = 400.0
     max_dest_pet_c: float = 38.0
+    # JITAI は道中の PET（勤務地とポッドの地点の日向の PET）が閾値以上なら見送る（safety.ROUTE_PET_MAX_C）
+    max_route_pet_c: float = 42.0
 
 
 @dataclass
@@ -95,9 +97,16 @@ class Coverage:
     """徒歩圏で覆える需要（coverage の価値）。各地点の徒歩圏の近傍は最初に一度だけ求める。"""
 
     def __init__(
-        self, world: StageWorld, pets: PetTable, *, walk_radius_m: float, max_dest_pet_c: float
+        self,
+        world: StageWorld,
+        pets: PetTable,
+        *,
+        walk_radius_m: float,
+        max_dest_pet_c: float,
+        max_route_pet_c: float,
     ) -> None:
-        self.world, self.pets, self.max_dest_pet_c = world, pets, max_dest_pet_c
+        self.world, self.pets = world, pets
+        self.max_dest_pet_c, self.max_route_pet_c = max_dest_pet_c, max_route_pet_c
         ids = world.spot_ids
         self._near: dict[str, list[str]] = {s: [] for s in ids}
         for i, a in enumerate(ids):
@@ -112,8 +121,11 @@ class Coverage:
         return self._near[spot_id]
 
     def relief(self, spot_id: str, hour: int) -> float:
-        """ポッドを置いたときの PET の改善。樹冠下 PET が閾値以上なら JITAI が見送るので 0。"""
+        """ポッドを置いたときの PET の改善。JITAI が見送る地点（樹冠下 PET が目的地の閾値以上、
+        または地点の日向の PET が道中の閾値以上）なら 0。"""
         if self.pets.pet(spot_id, hour, covered=True) >= self.max_dest_pet_c:
+            return 0.0
+        if self.pets.pet(spot_id, hour, covered=False) >= self.max_route_pet_c:
             return 0.0
         return self.pets.relief(spot_id, hour)
 
@@ -339,7 +351,11 @@ def run_fleet(
         raise ValueError("気象と舞台に共通の時刻がありません")
     coverage = (
         Coverage(
-            world, pets, walk_radius_m=fleet.walk_radius_m, max_dest_pet_c=fleet.max_dest_pet_c
+            world,
+            pets,
+            walk_radius_m=fleet.walk_radius_m,
+            max_dest_pet_c=fleet.max_dest_pet_c,
+            max_route_pet_c=fleet.max_route_pet_c,
         )
         if policy == "coverage"
         else None

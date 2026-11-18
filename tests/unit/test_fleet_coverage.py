@@ -7,7 +7,7 @@ from vmgs.fleet.comfort import PetTable
 from vmgs.fleet.dispatch import Coverage, FleetParams, Policy, place_initial, run_fleet
 from vmgs.fleet.stage_world import StageWorld
 from vmgs.jitai.pods import WALK_RADIUS_M
-from vmgs.jitai.safety import DEST_PET_MAX_C
+from vmgs.jitai.safety import DEST_PET_MAX_C, ROUTE_PET_MAX_C
 
 # 緯度 0.001° ≈ 111 m
 
@@ -15,10 +15,17 @@ from vmgs.jitai.safety import DEST_PET_MAX_C
 def _setup(*spots: dict[str, object], **weather: float):  # type: ignore[no-untyped-def]
     stage = _stage(*spots)
     world = StageWorld.from_stage(stage)
-    w = _weather(**weather)
+    # 既定は日向でも PET が JITAI の閾値に届かない気象（閾値を試すテストは閾値の側を動かす）
+    w = _weather(**{"temperature_c": 29.0, "shortwave_w_m2": 500.0, **weather})
     pets = PetTable(world, w)
     fp = FleetParams()
-    cov = Coverage(world, pets, walk_radius_m=fp.walk_radius_m, max_dest_pet_c=fp.max_dest_pet_c)
+    cov = Coverage(
+        world,
+        pets,
+        walk_radius_m=fp.walk_radius_m,
+        max_dest_pet_c=fp.max_dest_pet_c,
+        max_route_pet_c=fp.max_route_pet_c,
+    )
     return world, w, pets, cov
 
 
@@ -26,6 +33,7 @@ def test_歩ける距離とPETの閾値はJITAIと同じ値() -> None:
     fp = FleetParams()
     assert fp.walk_radius_m == WALK_RADIUS_M
     assert fp.max_dest_pet_c == DEST_PET_MAX_C
+    assert fp.max_route_pet_c == ROUTE_PET_MAX_C
 
 
 def test_同じワーカーを二重に数えない() -> None:
@@ -64,8 +72,12 @@ def test_需要の無い隣の地点でも_徒歩圏の需要を覆えば価値�
 def test_樹冠下のPETが閾値以上の地点には価値を付けない() -> None:
     world, _, pets, _ = _setup(_spot("SUN", 35.680, 139.760, shade=0.0))
     covered = pets.pet("SUN", 12, covered=True)
-    hot = Coverage(world, pets, walk_radius_m=400.0, max_dest_pet_c=covered - 0.1)
-    ok = Coverage(world, pets, walk_radius_m=400.0, max_dest_pet_c=covered + 0.1)
+    hot = Coverage(
+        world, pets, walk_radius_m=400.0, max_dest_pet_c=covered - 0.1, max_route_pet_c=99.0
+    )
+    ok = Coverage(
+        world, pets, walk_radius_m=400.0, max_dest_pet_c=covered + 0.1, max_route_pet_c=99.0
+    )
     assert hot.value(["SUN"], 12) == 0.0
     assert ok.value(["SUN"], 12) > 0.0
 
@@ -81,3 +93,13 @@ def test_離れた2か所の需要には_1台ずつ分けて置く() -> None:
     assert sorted(place_initial(world, pets, hours, 2)) == ["A", "A"]
     # coverage は、A の 2 台目は同じワーカーを覆うだけなので B に置く
     assert sorted(place_initial(world, pets, hours, 2, coverage=cov)) == ["A", "B"]
+
+
+def test_ポッドの地点の日向のPETが道中の閾値以上なら価値を付けない() -> None:
+    # JITAI は道中の PET に、ポッドの地点の日向（樹冠の外）の PET も含めて見送るため
+    world, _, pets, _ = _setup(_spot("SUN", 35.680, 139.760, shade=0.0))
+    sun = pets.pet("SUN", 12, covered=False)
+    hot = Coverage(world, pets, walk_radius_m=400.0, max_dest_pet_c=99.0, max_route_pet_c=sun - 0.1)
+    ok = Coverage(world, pets, walk_radius_m=400.0, max_dest_pet_c=99.0, max_route_pet_c=sun + 0.1)
+    assert hot.value(["SUN"], 12) == 0.0
+    assert ok.value(["SUN"], 12) > 0.0
