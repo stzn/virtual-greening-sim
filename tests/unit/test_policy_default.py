@@ -54,3 +54,20 @@ def test_雨よけは指定しなければ有り_no_rain_coverで無しにでき
     # When --no-rain-cover / Then 雨よけ無し（比べるとき）
     assert _parse([*argv, "--no-rain-cover"]).rain_cover is False
     assert _parse([*argv, "--rain-cover"]).rain_cover is True
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["jitai", "--stage", "s.json", "--dispatch", "d.json"],
+        ["loop", "--stage", "s.json", "--out-dir", "o"],
+        ["sweep", "--stage", "s.json", "--out-dir", "o"],
+    ],
+)
+def test_匿名にする人数と区画は指定しなければ3人と400m_指定すれば変えられる(
+    argv: list[str],
+) -> None:
+    args = _parse(argv)
+    assert (args.min_workers, args.zone_m) == (3, 400.0)
+    args = _parse([*argv, "--min-workers", "2", "--zone-m", "800"])
+    assert (args.min_workers, args.zone_m) == (2, 800.0)

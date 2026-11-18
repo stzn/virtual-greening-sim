@@ -94,6 +94,8 @@ class Job:
     rounds: int
     out_dir: Path
     rain_cover: bool = True
+    min_workers: int = 3
+    zone_m: float = 400.0
 
 
 def _matches(meta: Mapping[str, Any], job: Job) -> bool:
@@ -105,6 +107,8 @@ def _matches(meta: Mapping[str, Any], job: Job) -> bool:
         and meta.get("pods") == job.pods
         and meta.get("policy", "greedy") == job.policy
         and meta.get("rain_cover", False) == job.rain_cover
+        and meta.get("min_workers", 3) == job.min_workers
+        and meta.get("zone_m", 400.0) == job.zone_m
         and len(meta.get("rounds", [])) == job.rounds + 1
     )
 
@@ -130,6 +134,8 @@ def run_job(job: Job, weather_dir: Path) -> list[dict[str, Any]]:
             no_recovery=False,
             carryover_min=None,
             rain_cover=job.rain_cover,
+            min_workers=job.min_workers,
+            zone_m=job.zone_m,
             out_dir=job.out_dir,
         ),
         weather_dir,
@@ -319,6 +325,15 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         default=True,
         help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
+    sp.add_argument(
+        "--min-workers",
+        type=int,
+        default=3,
+        help="需要の集計で、これ未満の人数の区画・時刻は区画として出さない（既定 3。比べるとき）",
+    )
+    sp.add_argument(
+        "--zone-m", type=float, default=400.0, help="需要を集計する区画の一辺 [m]（既定 400）"
+    )
     sp.add_argument("--out-dir", type=Path, required=True)
 
 
@@ -341,6 +356,8 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
             rounds=args.rounds,
             out_dir=args.out_dir / f"{sc}-{pol}-p{p}" / f"seed{s}",
             rain_cover=args.rain_cover,
+            min_workers=args.min_workers,
+            zone_m=args.zone_m,
         )
         for sc in args.scenarios
         for pol in policies
@@ -377,6 +394,8 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
         "workers": args.workers,
         "rounds": args.rounds,
         "rain_cover": args.rain_cover,
+        "min_workers": args.min_workers,
+        "zone_m": args.zone_m,
         **summary,
     }
     (out / "summary.json").write_text(
