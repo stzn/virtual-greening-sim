@@ -25,7 +25,15 @@ from vmgs.jitai.engine import (
     run_jitai,
 )
 from vmgs.jitai.pods import POD_SEATS, WALK_RADIUS_M, Occupancy, PodSchedule
-from vmgs.jitai.safety import DEST_PET_MAX_C, RAIN_MAX_MM_H, ROUTE_PET_MAX_C, pet_check, rain_check
+from vmgs.jitai.safety import (
+    DEST_PET_MAX_C,
+    RAIN_COVER_MAX_MM_H,
+    RAIN_MAX_MM_H,
+    ROUTE_PET_MAX_C,
+    pet_check,
+    rain_check,
+    rain_limit,
+)
 from vmgs.jitai.workers import (
     Episode,
     Worker,
@@ -250,13 +258,13 @@ def test_雨の閾値は傘が要る1mm毎時() -> None:
     assert RAIN_MAX_MM_H == 1.0
 
 
-def _rain_run(rain: dict[int, float] | None):  # type: ignore[no-untyped-def]
+def _rain_run(rain: dict[int, float] | None, *, rain_cover: bool = False):  # type: ignore[no-untyped-def]
     # 勤務地にポッドが終日いて、PET は低い（暑さでは見送らない）
     world = StageWorld.from_stage(load_stage(SAMPLE_STAGE))
     s1 = world.stage_spot("OTM-001")
     w = _one_worker(s1.lat, s1.lon)
     sched = _dispatch({"P1": [(h, "OTM-001") for h in range(24)]})
-    return run_jitai([w], world, sched, _const_pet(30.0, 30.0), rain_mm=rain)
+    return run_jitai([w], world, sched, _const_pet(30.0, 30.0), rain_mm=rain, rain_cover=rain_cover)
 
 
 def test_雨が1mm毎時以上の時刻は_天候の段階で理由rainとして見送り_15分後に再判定する() -> None:
@@ -279,6 +287,29 @@ def test_雨が1mm毎時未満なら見送らない() -> None:
 
 def test_雨の気象を渡さなければ雨を見ない() -> None:
     assert not any(r.reason == "rain" for r in _rain_run(None).records)
+
+
+def test_雨の基準は_雨よけなしは1mm毎時_雨よけありは傘で歩ける5mm毎時() -> None:
+    assert rain_limit(rain_cover=False) == RAIN_MAX_MM_H == 1.0
+    assert rain_limit(rain_cover=True) == RAIN_COVER_MAX_MM_H == 5.0
+
+
+def test_ポッドに雨よけがあれば_5mm毎時未満の雨では介入する() -> None:
+    # Given 終日 3 mm/h の雨
+    rain = {h: 3.0 for h in range(24)}
+    # Then 雨よけなしは雨で見送り、雨よけありは座る間は雨よけの下・行き帰りは傘で歩けるので介入する
+    assert _rain_run(rain).records[0].reason == "rain"
+    covered = _rain_run(rain, rain_cover=True)
+    assert covered.records[0].outcome == "intervened"
+    assert not any(r.reason == "rain" for r in covered.records)
+
+
+def test_ポッドに雨よけがあっても_5mm毎時以上の雨では見送る() -> None:
+    result = _rain_run({h: 5.0 for h in range(24)}, rain_cover=True)
+    # 予定で見送る判定もあるので、天候の段階まで進んだ判定がすべて雨で見送られることを見る
+    weather = [r for r in result.records if r.stage == "pet"]
+    assert weather and all(r.reason == "rain" for r in weather)
+    assert not any(r.outcome == "intervened" for r in result.records)
 
 
 def _rec(t_min: int, worker: str) -> Record:

@@ -93,6 +93,7 @@ class Job:
     workers: int
     rounds: int
     out_dir: Path
+    rain_cover: bool = False
 
 
 def _matches(meta: Mapping[str, Any], job: Job) -> bool:
@@ -103,6 +104,7 @@ def _matches(meta: Mapping[str, Any], job: Job) -> bool:
         and meta.get("seed") == job.seed
         and meta.get("pods") == job.pods
         and meta.get("policy", "greedy") == job.policy
+        and meta.get("rain_cover", False) == job.rain_cover
         and len(meta.get("rounds", [])) == job.rounds + 1
     )
 
@@ -127,6 +129,7 @@ def run_job(job: Job, weather_dir: Path) -> list[dict[str, Any]]:
             rounds=job.rounds,
             no_recovery=False,
             carryover_min=None,
+            rain_cover=job.rain_cover,
             out_dir=job.out_dir,
         ),
         weather_dir,
@@ -310,6 +313,9 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     sp.add_argument("--workers", type=int, default=300)
     sp.add_argument("--rounds", type=int, default=1, help="vmgs loop の周回数")
     sp.add_argument("--jobs", type=int, default=1, help="並列に回す数")
+    sp.add_argument(
+        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+    )
     sp.add_argument("--out-dir", type=Path, required=True)
 
 
@@ -331,6 +337,7 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
             workers=args.workers,
             rounds=args.rounds,
             out_dir=args.out_dir / f"{sc}-{pol}-p{p}" / f"seed{s}",
+            rain_cover=args.rain_cover,
         )
         for sc in args.scenarios
         for pol in policies
@@ -366,12 +373,15 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
         "seeds": args.seeds,
         "workers": args.workers,
         "rounds": args.rounds,
+        "rain_cover": args.rain_cover,
         **summary,
     }
     (out / "summary.json").write_text(
         json.dumps(meta, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
     table = _markdown(summary)
+    if args.rain_cover:
+        table = "ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）\n\n" + table
     (out / "summary.md").write_text(table + "\n", encoding="utf-8")
     print(table)
     return 0

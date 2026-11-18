@@ -32,6 +32,9 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
     )
     lp.add_argument("--rounds", type=int, default=1, help="需要を書き戻して配車し直す回数")
     lp.add_argument("--no-recovery", action="store_true", help="介入後の回復を反映しない")
+    lp.add_argument(
+        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+    )
     lp.add_argument("--carryover-min", type=float, default=None, help="回復の持ち越しの時定数 [分]")
     lp.add_argument("--out-dir", type=Path, required=True)
 
@@ -110,6 +113,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 no_correction=False,
                 no_recovery=args.no_recovery,
                 carryover_min=args.carryover_min,
+                rain_cover=args.rain_cover,
                 out=jitai_path,
                 summary_out=summary_path,
                 messages=False,
@@ -155,6 +159,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
         "policy": args.policy,
         "recovery": not args.no_recovery,
         "carryover_min": args.carryover_min,
+        "rain_cover": args.rain_cover,
         "rounds": rows,
     }
     (out / "summary.json").write_text(

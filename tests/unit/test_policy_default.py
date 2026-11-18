@@ -36,3 +36,15 @@ def test_greedy_は指定すれば今までどおり選べる() -> None:
         _parse(["loop", "--stage", "s.json", "--out-dir", "o", "--policy", "greedy"]).policy
         == "greedy"
     )
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["loop", "--stage", "s.json", "--out-dir", "o"],
+        ["sweep", "--stage", "s.json", "--out-dir", "o"],
+    ],
+)
+def test_雨よけは指定しなければ無し_指定すれば有り(argv: list[str]) -> None:
+    assert _parse(argv).rain_cover is False
+    assert _parse([*argv, "--rain-cover"]).rain_cover is True
