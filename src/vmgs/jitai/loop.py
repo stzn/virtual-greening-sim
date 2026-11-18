@@ -22,6 +22,12 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
     lp.add_argument("--workers", type=int, default=300, help="合成のワーカーの人数")
     lp.add_argument("--seed", type=int, default=0)
     lp.add_argument("--pods", type=int, default=3, help="ポッドの台数")
+    lp.add_argument(
+        "--policy",
+        default="greedy",
+        choices=["greedy", "coverage"],
+        help="配車の方式（coverage: 徒歩圏で覆える需要を見る）",
+    )
     lp.add_argument("--rounds", type=int, default=1, help="需要を書き戻して配車し直す回数")
     lp.add_argument("--no-recovery", action="store_true", help="介入後の回復を反映しない")
     lp.add_argument("--carryover-min", type=float, default=None, help="回復の持ち越しの時定数 [分]")
@@ -82,7 +88,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 stage=stage_path,
                 scenario=args.scenario,
                 out=dispatch_path,
-                policy="greedy",
+                policy=args.policy,
                 pods=args.pods,
                 max_move_m=None,
                 compare=False,
@@ -144,6 +150,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
         "workers": args.workers,
         "seed": args.seed,
         "pods": args.pods,
+        "policy": args.policy,
         "recovery": not args.no_recovery,
         "carryover_min": args.carryover_min,
         "rounds": rows,

@@ -63,6 +63,7 @@ def _fake_loop(calls: list[argparse.Namespace]):  # type: ignore[no-untyped-def]
             "workers": args.workers,
             "seed": args.seed,
             "pods": args.pods,
+            "policy": args.policy,
             "rounds": rows,
         }
         (args.out_dir / "summary.json").write_text(json.dumps(meta), encoding="utf-8")
@@ -75,6 +76,7 @@ def _job(tmp_path: Path, **kw: Any) -> sweep.Job:
     base: dict[str, Any] = {
         "stage": tmp_path / "stage.json",
         "scenario": "normal",
+        "policy": "greedy",
         "pods": 3,
         "seed": 0,
         "workers": 30,
@@ -98,28 +100,47 @@ def test_同じ引数の実行は回し直さず_違えば回し直す(
     # 引数（ワーカー数）が違えば回し直す
     sweep.run_job(_job(tmp_path, workers=40), tmp_path)
     assert len(calls) == 2
+    # 方式が違っても回し直す
+    sweep.run_job(_job(tmp_path, workers=40, policy="coverage"), tmp_path)
+    assert len(calls) == 3 and calls[-1].policy == "coverage"
 
 
-def test_集計は周の差と台数の差を_seedで対にして出す() -> None:
+def test_集計は周の差と_方式と台数の差を_seedで対にして出す() -> None:
     rows = [
-        {"scenario": "normal", "pods": p, "seed": s, "round": r, "intervention_rate": v}
-        for p, s, r, v in [
-            (3, 0, 0, 0.10),
-            (3, 0, 1, 0.12),
-            (3, 1, 0, 0.20),
-            (3, 1, 1, 0.21),
-            (5, 0, 0, 0.15),
-            (5, 0, 1, 0.18),
-            (5, 1, 0, 0.25),
-            (5, 1, 1, 0.24),
+        {
+            "scenario": "normal",
+            "policy": pol,
+            "pods": p,
+            "seed": s,
+            "round": r,
+            "intervention_rate": v,
+        }
+        for pol, p, s, r, v in [
+            ("greedy", 3, 0, 0, 0.10),
+            ("greedy", 3, 0, 1, 0.12),
+            ("greedy", 3, 1, 0, 0.20),
+            ("greedy", 3, 1, 1, 0.21),
+            ("greedy", 5, 0, 0, 0.15),
+            ("greedy", 5, 0, 1, 0.18),
+            ("greedy", 5, 1, 0, 0.25),
+            ("greedy", 5, 1, 1, 0.24),
+            ("coverage", 3, 0, 0, 0.11),
+            ("coverage", 3, 1, 0, 0.23),
+            ("coverage", 3, 0, 1, 0.14),
+            ("coverage", 3, 1, 1, 0.26),
         ]
     ]
     out = sweep.summarize_sweep(rows, metrics=[("intervention_rate", True)])
-    by_round = {(d["scenario"], d["pods"], d["metric"]): d for d in out["round_diffs"]}
-    d = by_round[("normal", 3, "intervention_rate")]
+    by_round = {(d["policy"], d["pods"], d["metric"]): d for d in out["round_diffs"]}
+    d = by_round[("greedy", 3, "intervention_rate")]
     assert d["n"] == 2 and d["mean"] == pytest.approx(0.015) and d["better"] == 2
-    by_pods = {(d["pods"], d["round"]): d for d in out["pods_diffs"]}
-    assert by_pods[(5, 0)]["mean"] == pytest.approx(0.05) and by_pods[(5, 0)]["base_pods"] == 3
-    assert by_pods[(5, 1)]["mean"] == pytest.approx((0.06 + 0.03) / 2)
-    cell = {(c["pods"], c["round"]): c for c in out["cells"]}
-    assert cell[(3, 0)]["mean"] == pytest.approx(0.15)
+    # 最初の条件（引数の順の最初の方式・最小の台数 = greedy・3 台）との差
+    arms = {(d["policy"], d["pods"], d["round"]): d for d in out["arm_diffs"]}
+    g5 = arms[("greedy", 5, 0)]
+    assert g5["mean"] == pytest.approx(0.05)
+    assert (g5["base_policy"], g5["base_pods"]) == ("greedy", 3)
+    assert arms[("greedy", 5, 1)]["mean"] == pytest.approx((0.06 + 0.03) / 2)
+    assert arms[("coverage", 3, 1)]["mean"] == pytest.approx((0.02 + 0.05) / 2)
+    assert ("greedy", 3, 0) not in arms
+    cell = {(c["policy"], c["pods"], c["round"]): c for c in out["cells"]}
+    assert cell[("greedy", 3, 0)]["mean"] == pytest.approx(0.15)

@@ -143,7 +143,8 @@
   - [ ] 閾値（z・PET・徒歩圏・席数）を実データで決め直す（倫理審査の後）
   - [x] 配車と需要の反復の性質を確かめる（`vmgs loop --rounds 5`。収束せず、周期 2 の往復や揺れが出る。docs/jitai.md）
   - [x] 条件 × seed を回し、対にした差の CI で比べる（`vmgs sweep`。heatwave では集計の需要が一様より良い、normal は差が見えない）
-  - [ ] 配車の見直し（台数・置き方）を `vmgs sweep` で比べる
+  - [x] 配車の見直し（徒歩圏で覆える需要を見る coverage を追加、台数 3/5/8 と `vmgs sweep` で比較。coverage・3 台 ≒ greedy・8 台）
+  - [ ] 既定の方式を coverage に切り替えるか決める／coverage で集計の需要が heatwave で悪くなる理由を確かめる
   - [x] 反復が往復する問題を直す（需要を介入しない場合の判定点で数える。`latent_decisions`。1 周で需要が決まる）
 - [x] パイロット実験の手順の案（docs/pilot-protocol.md）: 持ち越し τc・ポッドの緑・PET の効果を実測で決める 2×2 + 追跡 30〜60 分。サンプルサイズの試算は scripts/pilot_power.py
   - [ ] HRV の機器を決める／倫理審査に出す／追跡の解析とデータ形式の拡張を実装する
