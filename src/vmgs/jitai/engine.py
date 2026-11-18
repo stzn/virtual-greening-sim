@@ -282,13 +282,39 @@ def demand_cells(
 ) -> list[dict[str, Any]]:
     """過緊張の判定点を、勤務地に近い地点の区画・時刻ごとに数え、区画内の地点に等分する。
 
-    min_workers 人未満の区画・時刻は出さない（地点単位より粗く数えることで、少人数でも需要が残る）。
+    min_workers 人未満の区画・時刻は区画としては出さず、時刻ごとに合算して min_workers 人以上なら
+    全地点に等分して足す（少人数の所の需要を 0 にすると、配車がそこを無視するため）。
     """
+    weight: dict[tuple[str, int], float] = {}
+    for z in demand_zone_counts(records, home_spot, zone_of, min_workers):
+        for sid in z["spot_ids"]:
+            weight[(sid, z["hour"])] = weight.get((sid, z["hour"]), 0.0) + z["count"] / len(
+                z["spot_ids"]
+            )
+    all_spots = sorted(zone_of)
+    for r in demand_residual_counts(records, home_spot, zone_of, min_workers):
+        for sid in all_spots:
+            weight[(sid, r["hour"])] = weight.get((sid, r["hour"]), 0.0) + r["count"] / len(
+                all_spots
+            )
     return [
-        {"spot_id": sid, "hour": z["hour"], "weight": z["count"] / len(z["spot_ids"])}
-        for z in demand_zone_counts(records, home_spot, zone_of, min_workers)
-        for sid in z["spot_ids"]
+        {"spot_id": sid, "hour": h, "weight": w}
+        for (sid, h), w in sorted(weight.items(), key=lambda kv: (kv[0][1], kv[0][0]))
     ]
+
+
+def _count_by_zone_hour(
+    records: Sequence[TimedDecision],
+    home_spot: Mapping[str, str],
+    zone_of: Mapping[str, tuple[int, int]],
+) -> tuple[Counter[tuple[tuple[int, int], int]], dict[tuple[tuple[int, int], int], set[str]]]:
+    counts: Counter[tuple[tuple[int, int], int]] = Counter()
+    people: dict[tuple[tuple[int, int], int], set[str]] = {}
+    for r in records:
+        key = (zone_of[home_spot[r.worker_id]], r.time_min // 60)
+        counts[key] += 1
+        people.setdefault(key, set()).add(r.worker_id)
+    return counts, people
 
 
 def demand_zone_counts(
@@ -301,16 +327,33 @@ def demand_zone_counts(
     spots_in: dict[tuple[int, int], list[str]] = {}
     for sid, zone in sorted(zone_of.items()):
         spots_in.setdefault(zone, []).append(sid)
-    counts: Counter[tuple[tuple[int, int], int]] = Counter()
-    people: dict[tuple[tuple[int, int], int], set[str]] = {}
-    for r in records:
-        key = (zone_of[home_spot[r.worker_id]], r.time_min // 60)
-        counts[key] += 1
-        people.setdefault(key, set()).add(r.worker_id)
+    counts, people = _count_by_zone_hour(records, home_spot, zone_of)
     return [
         {"zone": zone, "hour": h, "count": n, "spot_ids": spots_in[zone]}
         for (zone, h), n in sorted(counts.items())
         if len(people[(zone, h)]) >= min_workers
+    ]
+
+
+def demand_residual_counts(
+    records: Sequence[TimedDecision],
+    home_spot: Mapping[str, str],
+    zone_of: Mapping[str, tuple[int, int]],
+    min_workers: int = DEMAND_MIN_WORKERS,
+) -> list[dict[str, Any]]:
+    """min_workers 人未満で落とした区画・時刻を時刻ごとに合算した件数と人数（合算でも
+    min_workers 人以上の時刻だけ）。spots は配る先の地点の数（全地点）。"""
+    counts, people = _count_by_zone_hour(records, home_spot, zone_of)
+    n: Counter[int] = Counter()
+    who: dict[int, set[str]] = {}
+    for (zone, h), c in counts.items():
+        if len(people[(zone, h)]) < min_workers:
+            n[h] += c
+            who.setdefault(h, set()).update(people[(zone, h)])
+    return [
+        {"hour": h, "count": n[h], "workers": len(who[h]), "spots": len(zone_of)}
+        for h in sorted(n)
+        if len(who[h]) >= min_workers
     ]
 
 
