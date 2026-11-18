@@ -1,6 +1,13 @@
 """合成の RR 間隔データ（真のパラメータを埋め込み、解析で取り戻せるかを確かめるため）。
 
 1 セッション = オフィスでの安静（基準、既定 180 秒）→ 条件の切り替え（t=0）→ 接触（600 秒）。
+追跡（Design.track_s > 0）を付けると、接触の後に帰り（既定 300 秒、全条件で歩く）と、オフィスで
+座っての追跡を、接触の終わりから track_s 秒まで作る。接触の終わりの到達分は時定数 tau_c で減る:
+
+    lnHF(t) = b_s + ou(t) + slow(t) + beta_walk_step * 帰り中 + A_end * exp(-(t - T) / tau_c)  (t >= T)
+
+T は接触の終わり、A_end = A * (1 - exp(-T / tau))。slow は 1 時間の単位のゆっくりした揺らぎ（日内変動の
+代わり）で、追跡を付けたときだけ基準から終わりまで足す。追跡なしのときの拍は今までと同じになる。
 瞬時の ln(HF)（ln ms²）を次のように作る:
 
     lnHF(t) = b_s + ou(t)                                          (t < 0)
@@ -48,6 +55,9 @@ class TrueParams:
     walk_rr_drop_ms: float = 150.0
     ln_lf: float = 6.3
     rr_noise_ms: float = 4.0
+    tau_c_s: float = 1800.0  # 接触の後の持ち越しの時定数（JITAI の仮の値 30 分と同じ）
+    slow_ou_sd: float = 0.2  # 追跡のときのゆっくりした揺らぎ（JITAI の合成のワーカーと同じ仮定）
+    slow_ou_time_s: float = 1800.0
 
 
 @dataclass(frozen=True)
@@ -56,6 +66,8 @@ class Design:
     repeats: int = 2  # 被験者 × 条件ごとの繰り返し（環境は毎回引き直す）
     baseline_s: float = 180.0
     contact_s: float = 600.0
+    return_s: float = 300.0  # 接触の後、オフィスに戻るまでの歩行（追跡のときだけ使う）
+    track_s: float = 0.0  # 接触の終わりから追跡の終わりまで（0 は追跡なし）
 
 
 @dataclass(frozen=True)
@@ -145,8 +157,12 @@ def simulate_study(
     recordings: list[Recording] = []
     truth: dict[str, SessionTruth] = {}
     lead_s = 5.0  # 最初の窓の手前から拍を作る
-    grid_t = np.arange(-design.baseline_s - lead_s, design.contact_s + 5.0, 1.0)
+    tracked = design.track_s > 0
+    end_s = design.contact_s + design.track_s if tracked else design.contact_s
+    grid_t = np.arange(-design.baseline_s - lead_s, end_s + 5.0, 1.0)
     after = grid_t >= 0
+    post = grid_t >= design.contact_s
+    returning = post & (grid_t < design.contact_s + design.return_s)
     for s in range(design.n_subjects):
         subject = f"P{s + 1:02d}"
         b_s = p.baseline_lnhf + rng.normal(0.0, p.subject_baseline_sd)
@@ -162,17 +178,38 @@ def simulate_study(
                 )
                 offset = p.beta_walk_step * walk
                 rise = np.where(after, 1.0 - np.exp(-np.clip(grid_t, 0, None) / p.tau_s), 0.0)
-                ln_hf = (
-                    b_s
-                    + ou_process(grid_t.size, 1.0, p.ou_sd, p.ou_time_s, rng)
-                    + after * offset
-                    + amplitude * rise
-                )
+                ou = ou_process(grid_t.size, 1.0, p.ou_sd, p.ou_time_s, rng)
+                ln_hf = b_s + ou + after * offset + amplitude * rise
                 mean_rr = np.full(grid_t.size, rr_s) - after * walk * p.walk_rr_drop_ms
-                times, rr = _beats(grid_t[0], design.contact_s, ln_hf, mean_rr, grid_t, p, rng)
+                track: tuple[float | None, float | None, float | None] = (None, None, None)
+                if tracked:
+                    # 追跡なしのときの乱数の順を変えないよう、ゆっくりした揺らぎは後から引く
+                    slow = ou_process(grid_t.size, 1.0, p.slow_ou_sd, p.slow_ou_time_s, rng)
+                    end_level = amplitude * (1.0 - np.exp(-design.contact_s / p.tau_s))
+                    since = np.clip(grid_t - design.contact_s, 0, None)
+                    carry = end_level * np.exp(-since / p.tau_c_s)
+                    ln_hf = (
+                        np.where(post, b_s + ou + returning * p.beta_walk_step + carry, ln_hf)
+                        + slow
+                    )
+                    mean_rr = np.where(post, rr_s - returning * p.walk_rr_drop_ms, mean_rr)
+                    track = (design.contact_s, design.contact_s + design.return_s, end_s)
+                times, rr = _beats(grid_t[0], end_s, ln_hf, mean_rr, grid_t, p, rng)
                 session = f"{subject}-{condition}-{r + 1}"
                 recordings.append(
-                    Recording(session, subject, condition, green, pet, noise, times, rr)
+                    Recording(
+                        session,
+                        subject,
+                        condition,
+                        green,
+                        pet,
+                        noise,
+                        times,
+                        rr,
+                        contact_end_s=track[0],
+                        track_start_s=track[1],
+                        track_end_s=track[2],
+                    )
                 )
                 truth[session] = SessionTruth(offset=offset, amplitude=float(amplitude))
     return SyntheticStudy(recordings, p, truth)

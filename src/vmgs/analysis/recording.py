@@ -15,6 +15,9 @@ CONDITIONS: dict[str, tuple[bool, bool]] = {
     "walk-leave": (True, True),
 }
 
+# 追跡の区間に記録する出来事（その窓は解析から除く）
+EVENTS = ("talk", "phone", "food", "away")
+
 
 @dataclass(frozen=True, eq=False)
 class Recording:
@@ -31,12 +34,36 @@ class Recording:
     noise_db: float  # 騒音 [dB(A)]
     beat_times_s: FloatArray
     rr_ms: FloatArray
+    # 追跡（接触の後、pilot-protocol.md 4.2）。無ければ None（接触中の解析だけに使える記録）
+    contact_end_s: float | None = None
+    track_start_s: float | None = None
+    track_end_s: float | None = None
+    events: tuple[tuple[float, str], ...] = ()  # (時刻 [秒], 出来事)。時刻の順
 
     def __post_init__(self) -> None:
         if self.condition not in CONDITIONS:
             raise ValueError(f"知らない条件: {self.condition}（{sorted(CONDITIONS)} のどれか）")
         if self.beat_times_s.shape != self.rr_ms.shape:
             raise ValueError("beat_times_s と rr_ms の長さが違う")
+        track = (self.contact_end_s, self.track_start_s, self.track_end_s)
+        if any(t is None for t in track) and any(t is not None for t in track):
+            raise ValueError("contact_end・track_start・track_end はそろって書くか、どれも書かない")
+        if self.contact_end_s is not None:
+            assert self.track_start_s is not None and self.track_end_s is not None
+            if not 0.0 <= self.contact_end_s <= self.track_start_s <= self.track_end_s:
+                raise ValueError(
+                    "時刻の順が違う（接触の始め ≦ 接触の終わり ≦ 追跡の始め ≦ 追跡の終わり）"
+                )
+        unknown = sorted({e for _, e in self.events} - set(EVENTS))
+        if unknown:
+            raise ValueError(
+                f"知らない出来事: {', '.join(unknown)}（{', '.join(EVENTS)} のどれか）"
+            )
+
+    @property
+    def tracked(self) -> bool:
+        """追跡の区間を持つか。"""
+        return self.contact_end_s is not None
 
     @property
     def walk(self) -> bool:
