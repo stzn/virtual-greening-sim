@@ -53,7 +53,7 @@ P01-sit-leave-1,P01,sit-leave,2026-07-01T10:03:00+09:00,0.72,31.4,58
 
 出来事の CSV（`read_recordings(..., events_path=...)`）: `session, time, event`。`event` は `talk`・`phone`・`food`・`away` のどれか。その時刻を含む追跡の窓は解析から除きます。セッションの CSV に無い session は止めます。
 
-環境の CSV（`read_environment`）: `session, time, ta_c, rh_pct, wind_ms, globe_c, laeq_db`（1 分ごと）。`contact_environment` で接触中の平均を出し、`pet_c`・`noise_db` をセッションの CSV に書く元にします（PET の計算は別）。
+環境の CSV（`read_environment`）: `session, time, ta_c, rh_pct, wind_ms, globe_c, laeq_db`（1 分ごと）。`contact_environment` で接触中の平均を出し、`pet_c`・`noise_db` をセッションの CSV に書く元にします。`contact_pet` は接触中の平均の気温・湿度・風・黒球温度から PET を出します。MRT は黒球温度から ISO 7726 の強制対流の式で求め（黒球の直径 0.15 m・放射率 0.95、`vmgs.thermal.globe_mrt_c`）、風は人体の高さの実測とみなして換算しません（下限 0.1 m/s）。PET の人体の条件はシミュレーターと同じ（1.37 met・0.5 clo）。1 分ごとの PET の平均ではなく、10 分の平均の環境から 1 回計算します。
 
 ```csv
 session,subject,condition,contact_start,green,pet_c,noise_db,contact_end,track_start,track_end

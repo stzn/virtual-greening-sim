@@ -10,6 +10,7 @@ import pytest
 from vmgs.analysis.io import (
     RecordingFormatError,
     contact_environment,
+    contact_pet,
     read_environment,
     read_recordings,
     write_recordings,
@@ -179,3 +180,33 @@ def test_環境の記録を読み_接触中の平均を出す(tmp_path: Path) ->
     # 接触中（0〜600 秒）の 2 行だけの平均
     assert mean["ta_c"] == pytest.approx(31.0)
     assert mean["laeq_db"] == pytest.approx(60.0)
+
+
+def test_接触中の環境の平均からPETを出す(tmp_path: Path) -> None:
+    from vmgs.thermal import globe_mrt_c, pet
+
+    env = tmp_path / "environment.csv"
+    env.write_text(
+        "session,time,ta_c,rh_pct,wind_ms,globe_c,laeq_db\n"
+        "s1,0,30,55,1.0,34,58\ns1,300,32,50,2.0,36,62\ns1,700,27,58,0.4,28,51\n",
+        encoding="utf-8",
+    )
+    table = read_environment(env, {"s1": 0.0})
+    # When 接触中（0〜600 秒）の PET を出す
+    value = contact_pet(table, "s1", contact_end_s=600.0)
+    # Then 接触中の平均（気温 31・湿度 52.5・風 1.5・黒球 35）から MRT を出し、PET にする
+    mrt = globe_mrt_c(ta_c=31.0, globe_c=35.0, wind_ms=1.5)
+    assert value == pytest.approx(pet(temp_c=31.0, mrt_c=mrt, wind_ms=1.5, humidity_pct=52.5))
+    # 日なた（黒球が気温より高い）なので、PET は気温より高い
+    assert value > 31.0
+
+
+def test_接触中の環境の記録が無ければ_PETは出さずに止める(tmp_path: Path) -> None:
+    env = tmp_path / "environment.csv"
+    env.write_text(
+        "session,time,ta_c,rh_pct,wind_ms,globe_c,laeq_db\ns1,700,27,58,0.4,28,51\n",
+        encoding="utf-8",
+    )
+    table = read_environment(env, {"s1": 0.0})
+    with pytest.raises(ValueError, match="接触中"):
+        contact_pet(table, "s1", contact_end_s=600.0)

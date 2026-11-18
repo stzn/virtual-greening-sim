@@ -185,12 +185,12 @@ uv run python scripts/pilot_power.py --reps 20 --greens 0.6 --noise-sd 0.3 --slo
 - セッションの CSV に足す列（任意の列にする案）: `contact_end`（接触の終わり）、`track_start`（戻りの後、追跡を始めた時刻）、`track_end`（追跡の終わり）。時刻は `contact_start` と同じ表し方。
 - 拍の CSV は今のまま（追跡の区間の拍も同じファイルに続けて入れる）。
 - 出来事の CSV（新規）: `session, time, event`（`talk`・`phone`・`food`・`away` など）。
-- 環境の CSV（新規）: `session, time, ta_c, rh_pct, wind_ms, globe_c, laeq_db`。ここから `pet_c`・`noise_db`（接触の 10 分の平均）をセッションの CSV に書く。`green` は写真から求めた値をセッションの CSV に書く。
+- 環境の CSV（新規）: `session, time, ta_c, rh_pct, wind_ms, globe_c, laeq_db`。ここから `pet_c`（`vmgs.analysis.io.contact_pet`。接触の 10 分の平均の環境から計算）・`noise_db`（`contact_environment` の `laeq_db`）をセッションの CSV に書く。`green` は写真から求めた値をセッションの CSV に書く。
 
 ## 8. 未決事項
 - HRV の機器（3.1 の基準で選ぶ）。
 - leave の行き先の数・選び方、行きの移動の扱い、stay の条件の戻りの 5 分（2 章）。
 - 緑の量の定義（写真の枚数・方向、緑の判定の方法）。
 - 被験者数（5 章の目安と、募集のしやすさ・倫理審査で決める）。
-- 環境の CSV から PET を計算する手順（今は接触中の平均を出すところまで。`vmgs.analysis.io.contact_environment`）。
+- 黒球温度計の直径（`contact_pet` は ISO 7726 の標準の 0.15 m を前提にしている。小型の黒球を使うなら式の直径を変える）。
 - 倫理審査の区分・保存期間（6 章、未確認）。

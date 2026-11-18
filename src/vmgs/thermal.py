@@ -116,6 +116,21 @@ def mean_radiant_temp(r: RadiationInput) -> float:
     return float((absorbed / (EMISSIVITY_BODY * STEFAN_BOLTZMANN)) ** 0.25 - 273.15)
 
 
+GLOBE_DIAMETER_M = 0.15  # 黒球温度計の直径（ISO 7726 の標準）
+GLOBE_EMISSIVITY = 0.95
+
+
+def globe_mrt_c(*, ta_c: float, globe_c: float, wind_ms: float) -> float:
+    """黒球温度から MRT [℃]（ISO 7726 の強制対流の式。直径 0.15 m・放射率 0.95）。
+
+    wind_ms は黒球の高さの風速（実測。人体の高さで測る前提で換算しない）。下限は MIN_BODY_WIND_MS。
+    """
+    v = max(MIN_BODY_WIND_MS, wind_ms)
+    h = 1.1e8 * v**0.6 / (GLOBE_EMISSIVITY * GLOBE_DIAMETER_M**0.4)
+    t4 = (globe_c + 273.15) ** 4 + h * (globe_c - ta_c)
+    return float(t4**0.25 - 273.15)
+
+
 def body_wind_ms(wind_10m_ms: float) -> float:
     """高さ 10 m の風速を、人体の高さ（1.1 m）の風速に換算する。"""
     return max(MIN_BODY_WIND_MS, wind_10m_ms * WIND_10M_TO_BODY)
