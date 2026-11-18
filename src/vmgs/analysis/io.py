@@ -149,6 +149,20 @@ def contact_environment(env: pd.DataFrame, session: str, contact_end_s: float) -
     return {c: float(rows[c].mean()) for c in ENVIRONMENT_COLUMNS[2:]}
 
 
+def contact_pet(env: pd.DataFrame, session: str, contact_end_s: float) -> float:
+    """接触中の環境の平均（気温・湿度・風・黒球温度）から PET [℃]。セッションの CSV の pet_c に書く元。
+
+    MRT は黒球温度から ISO 7726 の式で出す（`thermal.globe_mrt_c`）。風は人体の高さの実測とみなす。
+    1 分ごとの PET の平均ではなく、10 分の平均の環境から 1 回計算する（PET は非線形なので少し違う）。
+    """
+    from vmgs.thermal import MIN_BODY_WIND_MS, globe_mrt_c, pet
+
+    m = contact_environment(env, session, contact_end_s)
+    wind = max(MIN_BODY_WIND_MS, m["wind_ms"])
+    mrt = globe_mrt_c(ta_c=m["ta_c"], globe_c=m["globe_c"], wind_ms=wind)
+    return pet(temp_c=m["ta_c"], mrt_c=mrt, wind_ms=wind, humidity_pct=m["rh_pct"])
+
+
 def _iso(start: pd.Timestamp, seconds: float) -> str:
     """接触開始 start から seconds 秒後の日時（ISO 8601）。"""
     return str((start + pd.Timedelta(seconds=seconds)).isoformat())

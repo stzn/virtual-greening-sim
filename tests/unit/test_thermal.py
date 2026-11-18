@@ -6,6 +6,7 @@ import pytest
 
 from vmgs.thermal import (
     RadiationInput,
+    globe_mrt_c,
     mean_radiant_temp,
     pet,
     solar_elevation_deg,
@@ -67,3 +68,24 @@ def test_pet_rises_with_mrt() -> None:
     low = pet(temp_c=34.0, mrt_c=34.0, wind_ms=1.0, humidity_pct=50.0)
     high = pet(temp_c=34.0, mrt_c=60.0, wind_ms=1.0, humidity_pct=50.0)
     assert high > low + 5.0
+
+
+def test_黒球温度が気温と同じなら_MRTは気温と同じ() -> None:
+    assert globe_mrt_c(ta_c=30.0, globe_c=30.0, wind_ms=1.0) == pytest.approx(30.0)
+
+
+def test_黒球温度が気温より高ければ_MRTは黒球温度より高い() -> None:
+    # 風で黒球が冷やされる分、放射は黒球温度より強い
+    assert globe_mrt_c(ta_c=30.0, globe_c=35.0, wind_ms=1.0) > 35.0
+
+
+def test_黒球からのMRTは_ISO7726の強制対流の式の手計算と合う() -> None:
+    # 直径 0.15 m・放射率 0.95、気温 30・黒球 35 ℃・風 1 m/s:
+    # [(308.15)^4 + 1.1e8 × 1^0.6 / (0.95 × 0.15^0.4) × 5]^0.25 − 273.15 ≈ 45.1 ℃
+    assert globe_mrt_c(ta_c=30.0, globe_c=35.0, wind_ms=1.0) == pytest.approx(45.1, abs=0.2)
+
+
+def test_風が弱すぎるときは_下限の風速で計算する() -> None:
+    assert globe_mrt_c(ta_c=30.0, globe_c=35.0, wind_ms=0.0) == pytest.approx(
+        globe_mrt_c(ta_c=30.0, globe_c=35.0, wind_ms=0.1)
+    )
