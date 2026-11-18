@@ -304,6 +304,19 @@ def test_ポッドに雨よけがあれば_5mm毎時未満の雨では介入す�
     assert not any(r.reason == "rain" for r in covered.records)
 
 
+def test_雨よけを指定しなければ雨よけ有りとして_5mm毎時未満の雨では介入する() -> None:
+    # Given 終日 3 mm/h の雨、rain_cover を渡さない
+    world = StageWorld.from_stage(load_stage(SAMPLE_STAGE))
+    s1 = world.stage_spot("OTM-001")
+    w = _one_worker(s1.lat, s1.lon)
+    sched = _dispatch({"P1": [(h, "OTM-001") for h in range(24)]})
+    result = run_jitai(
+        [w], world, sched, _const_pet(30.0, 30.0), rain_mm={h: 3.0 for h in range(24)}
+    )
+    # Then 既定は雨よけ有りなので介入する
+    assert result.records[0].outcome == "intervened"
+
+
 def test_ポッドに雨よけがあっても_5mm毎時以上の雨では見送る() -> None:
     result = _rain_run({h: 5.0 for h in range(24)}, rain_cover=True)
     # 予定で見送る判定もあるので、天候の段階まで進んだ判定がすべて雨で見送られることを見る

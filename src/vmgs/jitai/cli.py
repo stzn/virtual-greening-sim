@@ -39,7 +39,10 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         help="帰った後に回復が減る時定数 [分]（既定: 30。根拠のない仮の値）",
     )
     j.add_argument(
-        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+        "--rain-cover",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
     j.add_argument(
         "--messages", action="store_true", help="介入した記録に通知文（message）を付ける"
