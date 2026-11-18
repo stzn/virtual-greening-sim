@@ -25,7 +25,10 @@ from vmgs.analysis.study import BASELINE_S, STEP_S
 
 RETURN_MIN = 5  # 接触の終わりからオフィスに戻るまで（帰りの歩行。解析から除く）
 TRACK_END_MIN = 60  # 接触の終わりから追跡の終わりまで
-ENDPOINT_MIN = (5, 25)  # 持ち越しの検出に使う区間（接触の終わりから。見直しは docs/pilot-protocol.md 4.2）
+ENDPOINT_MIN = (
+    5,
+    25,
+)  # 持ち越しの検出に使う区間（接触の終わりから。見直しは docs/pilot-protocol.md 4.2）
 TRACK_WINDOW_S = 60.0
 TAU_C_BOUNDS_MIN = (1.0, 600.0)
 
