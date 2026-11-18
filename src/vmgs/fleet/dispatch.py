@@ -348,7 +348,7 @@ def run_fleet(
     params = params or Params()
     hours = sorted(set(weather) & world.hours)
     if not hours:
-        raise ValueError("気象と舞台に共通の時刻がありません")
+        raise ValueError("気象と地点データに共通の時刻がありません")
     coverage = (
         Coverage(
             world,

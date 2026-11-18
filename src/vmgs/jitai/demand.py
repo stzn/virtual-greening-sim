@@ -1,6 +1,6 @@
-"""JITAI の需要の集計（`vmgs jitai` の出力の `demand.cells`）を、舞台の stage.json の demand へ書き戻す。
+"""JITAI の需要の集計（`vmgs jitai` の出力の `demand.cells`）を、地点データの stage.json の demand へ書き戻す。
 
-書き戻した舞台で `vmgs dispatch` を回すと、既定の需要（8〜19 時に一様）の代わりに、
+書き戻した地点データで `vmgs dispatch` を回すと、既定の需要（8〜19 時に一様）の代わりに、
 過緊張の判定点を地点・時刻ごとに数えた集計値で配車する。集計値だけを扱い、個人の値は入らない。
 """
 
@@ -41,20 +41,20 @@ def demand_zones(stage: Stage, zone_m: float = DEMAND_ZONE_M) -> dict[str, Zone]
 def apply_demand(stage: Stage, jitai_out: Mapping[str, Any]) -> Stage:
     """stage の全地点の demand を、jitai_out の集計で置き換えた新しい Stage を返す（足し合わせない）。
 
-    舞台と区域・日付が違う、舞台にない地点を含む、集計が空のときは ValueError。
+    地点データと区域・日付が違う、地点データにない地点を含む、集計が空のときは ValueError。
     集計が空のまま書き戻すと、配車が黙って既定の需要に戻るため拒否する。
     """
     ref = jitai_out["stage_ref"]
     cells = jitai_out["demand"]["cells"]
     errors: list[str] = []
     if ref["area_id"] != stage.area.id:
-        errors.append(f"区域が違う: 集計 {ref['area_id']} / 舞台 {stage.area.id}")
+        errors.append(f"区域が違う: 集計 {ref['area_id']} / 地点データ {stage.area.id}")
     if ref["date"] != stage.date.isoformat():
-        errors.append(f"日付が違う: 集計 {ref['date']} / 舞台 {stage.date.isoformat()}")
+        errors.append(f"日付が違う: 集計 {ref['date']} / 地点データ {stage.date.isoformat()}")
     known = {s.id for s in stage.spots}
     unknown = sorted({c["spot_id"] for c in cells} - known)
     if unknown:
-        errors.append(f"舞台にない地点: {', '.join(unknown)}")
+        errors.append(f"地点データにない地点: {', '.join(unknown)}")
     if not cells:
         errors.append(
             "需要の集計が空（3 人未満の地点・時刻は出さないため、すべて消えた可能性がある）"
@@ -72,7 +72,7 @@ def apply_demand(stage: Stage, jitai_out: Mapping[str, Any]) -> Stage:
         # 時刻の重複や範囲は契約のモデルで確かめる
         return Stage.model_validate(data)
     except ValidationError as e:
-        raise ValueError(f"書き戻した舞台が契約に合わない: {e}") from e
+        raise ValueError(f"書き戻した地点データが契約に合わない: {e}") from e
 
 
 def jitai_summary(
@@ -84,7 +84,7 @@ def jitai_summary(
     zone_m: float = DEMAND_ZONE_M,
     min_workers: int = DEMAND_MIN_WORKERS,
 ) -> JitaiSummary:
-    """舞台に渡す JITAI の集計（契約 v1）。区画・時刻ごとの件数だけで、個人の記録は入れない。"""
+    """地図アプリに渡す JITAI の集計（契約 v1）。区画・時刻ごとの件数だけで、個人の記録は入れない。"""
     west, south, _east, _north = stage.area.bbox
     zones = zone_hour_summary(result.records, home_spot, demand_zones(stage, zone_m), min_workers)
     return JitaiSummary.model_validate(

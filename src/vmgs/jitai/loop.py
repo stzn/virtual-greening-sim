@@ -1,7 +1,7 @@
 """`vmgs loop`: 配車 → JITAI → 需要の書き戻し を、指定の周回だけ繰り返す。
 
-周 0 は入力の舞台のまま配車する（需要が空なら既定の一様の需要）。周 r の JITAI の需要の集計を
-舞台に書き戻したものが周 r+1 の舞台になる。各周のファイルと、周ごとの表（summary.md・summary.json）を
+周 0 は入力の地点データのまま配車する（需要が空なら既定の一様の需要）。周 r の JITAI の需要の集計を
+地点データに書き戻したものが周 r+1 の地点データになる。各周のファイルと、周ごとの表（summary.md・summary.json）を
 書き出す。各段階は `vmgs dispatch`・`vmgs jitai` と同じ関数を呼ぶ（引数の既定も同じ）。
 
 例: uv run vmgs loop --stage contracts/fixtures/stage.sample.json --scenario normal \\
@@ -17,7 +17,9 @@ from typing import Any
 
 def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     lp = sub.add_parser("loop", help="配車 → JITAI → 需要の書き戻し を繰り返し、周ごとの表を出す")
-    lp.add_argument("--stage", type=Path, required=True, help="舞台の stage.json（上書きしない）")
+    lp.add_argument(
+        "--stage", type=Path, required=True, help="地点データの stage.json（上書きしない）"
+    )
     lp.add_argument("--scenario", default="normal", choices=["heatwave", "normal", "rainy"])
     lp.add_argument("--workers", type=int, default=300, help="合成のワーカーの人数")
     lp.add_argument("--seed", type=int, default=0)
@@ -35,7 +37,7 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
 
 
 def _demand_vector(stage_path: Path) -> dict[tuple[str, int], float]:
-    """舞台の需要を、合計 1 の分布にする（需要が空なら空）。"""
+    """地点データの需要を、合計 1 の分布にする（需要が空なら空）。"""
     data = json.loads(stage_path.read_text(encoding="utf-8"))
     cells = {(s["id"], d["hour"]): float(d["weight"]) for s in data["spots"] for d in s["demand"]}
     total = sum(cells.values())

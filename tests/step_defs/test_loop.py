@@ -20,7 +20,7 @@ def ctx() -> dict[str, Any]:
     return {}
 
 
-@given(parsers.parse('サンプルの舞台 "{stage}" がある'))
+@given(parsers.parse('サンプルの地点データ "{stage}" がある'))
 def _g_stage(ctx: dict[str, Any], stage: str) -> None:
     ctx["stage"] = ROOT / stage
 
@@ -61,7 +61,7 @@ def _t_code(ctx: dict[str, Any], code: int) -> None:
     assert ctx["code"] == code, ctx["stderr"]
 
 
-@then("周 0〜2 の舞台・配車・JITAI・JITAI の集計のファイルがある")
+@then("周 0〜2 の地点データ・配車・JITAI・JITAI の集計のファイルがある")
 def _t_files(ctx: dict[str, Any]) -> None:
     for r in range(ctx["rounds"] + 1):
         for name in ("stage", "dispatch", "jitai", "jitai-summary"):
@@ -70,7 +70,7 @@ def _t_files(ctx: dict[str, Any]) -> None:
     assert (ctx["out"] / "summary.json").exists()
 
 
-@then("周 1 以降の舞台の需要は、前の周の JITAI の需要の集計と一致する")
+@then("周 1 以降の地点データの需要は、前の周の JITAI の需要の集計と一致する")
 def _t_demand_chain(ctx: dict[str, Any]) -> None:
     for r in range(1, ctx["rounds"] + 1):
         stage = json.loads((ctx["out"] / f"stage.r{r}.json").read_text(encoding="utf-8"))
@@ -84,7 +84,7 @@ def _t_demand_chain(ctx: dict[str, Any]) -> None:
         assert "default-demand" not in d["generator"]
 
 
-@then("JITAI の集計は契約に合い、舞台との食い違いが無い")
+@then("JITAI の集計は契約に合い、地点データとの食い違いが無い")
 def _t_summary_contract(ctx: dict[str, Any]) -> None:
     for r in range(ctx["rounds"] + 1):
         stage = Stage.model_validate_json((ctx["out"] / f"stage.r{r}.json").read_text("utf-8"))
@@ -109,7 +109,7 @@ def _t_table(ctx: dict[str, Any]) -> None:
     assert "介入率" in md and "過緊張の窓" in md
 
 
-@then("周 1 と周 2 の舞台は同じになる")
+@then("周 1 と周 2 の地点データは同じになる")
 def _t_fixed_point(ctx: dict[str, Any]) -> None:
     # 需要が配車の結果に左右されなければ、周 1 の需要の集計は周 2 でも変わらない
     r1 = (ctx["out"] / "stage.r1.json").read_text(encoding="utf-8")

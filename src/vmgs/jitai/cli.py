@@ -1,4 +1,4 @@
-"""`vmgs jitai`: 舞台の stage.json と配車の dispatch.json から、合成のワーカーで JITAI を回す。
+"""`vmgs jitai`: 地点データの stage.json と配車の dispatch.json から、合成のワーカーで JITAI を回す。
 
 例: uv run vmgs jitai --stage contracts/fixtures/stage.sample.json \\
         --dispatch contracts/fixtures/dispatch.sample.json --scenario normal --out runs/jitai.json
@@ -17,7 +17,7 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     j = sub.add_parser(
         "jitai", help="合成のワーカーで JITAI（検知→予定→ポッド→PET）を回し、介入の記録を書き出す"
     )
-    j.add_argument("--stage", type=Path, required=True, help="舞台の stage.json")
+    j.add_argument("--stage", type=Path, required=True, help="地点データの stage.json")
     j.add_argument("--dispatch", type=Path, required=True, help="配車の dispatch.json")
     j.add_argument(
         "--scenario",
@@ -51,7 +51,7 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     j.add_argument(
         "--summary-out",
         type=Path,
-        help="舞台に渡す JITAI の集計（契約 v1 の jitai-summary.json）の出力先",
+        help="地図アプリに渡す JITAI の集計（契約 v1 の jitai-summary.json）の出力先",
     )
 
 
@@ -63,13 +63,14 @@ def _parse_llm(spec: str) -> str:
 
 def add_demand_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     d = sub.add_parser(
-        "demand", help="vmgs jitai の需要の集計を stage.json の demand に書き戻した舞台を書き出す"
+        "demand",
+        help="vmgs jitai の需要の集計を stage.json の demand に書き戻した地点データを書き出す",
     )
     d.add_argument(
-        "--stage", type=Path, required=True, help="元の舞台の stage.json（上書きしない）"
+        "--stage", type=Path, required=True, help="元の地点データの stage.json（上書きしない）"
     )
     d.add_argument("--jitai", type=Path, required=True, help="vmgs jitai の出力")
-    d.add_argument("--out", type=Path, required=True, help="書き戻した舞台の出力先")
+    d.add_argument("--out", type=Path, required=True, help="書き戻した地点データの出力先")
 
 
 def cmd_demand(args: argparse.Namespace) -> int:
@@ -77,7 +78,7 @@ def cmd_demand(args: argparse.Namespace) -> int:
     from vmgs.jitai.demand import apply_demand
 
     if args.out.resolve() == args.stage.resolve():
-        print("--out は元の舞台と別のファイルにしてください", file=sys.stderr)
+        print("--out は元の地点データと別のファイルにしてください", file=sys.stderr)
         return 1
     stage = load_stage(args.stage)
     jitai_out = json.loads(args.jitai.read_text(encoding="utf-8"))
@@ -154,7 +155,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     dispatch = Dispatch.model_validate_json(args.dispatch.read_text(encoding="utf-8"))
     errors = dispatch_errors_against_stage(dispatch, stage)
     if errors:
-        print("配車が舞台と食い違います:", *errors, sep="\n  ", file=sys.stderr)
+        print("配車が地点データと食い違います:", *errors, sep="\n  ", file=sys.stderr)
         return 1
     scenario = args.scenario or dispatch.weather_scenario
     weather_path = weather_dir / f"{scenario}.json"
@@ -168,10 +169,10 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     weather = {r.time.hour: r for r in load_records(weather_path)}
     pets = PetTable(world, weather)
 
-    # 判定は 8〜19 時（帰りが 19 時台にかかる）。PET に要る時刻が気象と舞台にそろっているか
+    # 判定は 8〜19 時（帰りが 19 時台にかかる）。PET に要る時刻が気象と地点データにそろっているか
     missing = sorted(set(range(8, 20)) - (set(weather) & world.hours))
     if missing:
-        print(f"気象か舞台に、判定に要る時刻がありません: {missing}", file=sys.stderr)
+        print(f"気象か地点データに、判定に要る時刻がありません: {missing}", file=sys.stderr)
         return 1
 
     workers = make_workers(stage, args.workers, seed=args.seed)

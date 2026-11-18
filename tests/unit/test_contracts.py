@@ -1,4 +1,4 @@
-"""舞台（tokyo-green-simulator）と役者（本リポジトリ）のデータ契約の振る舞い。"""
+"""地図アプリ（tokyo-green-simulator）とシミュレーター（本リポジトリ）のデータ契約の振る舞い。"""
 
 import json
 from pathlib import Path
@@ -33,7 +33,7 @@ def test_正本のスキーマはモデルから生成したものと一致す�
         )
 
 
-def test_舞台のサンプルを読み込める() -> None:
+def test_地点データのサンプルを読み込める() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     assert stage.schema_version == "1"
     assert stage.area.id == "otemachi"
@@ -41,7 +41,7 @@ def test_舞台のサンプルを読み込める() -> None:
     assert all(len(s.hourly) == 24 for s in stage.spots)
 
 
-def test_配車のサンプルは舞台のサンプルと整合する() -> None:
+def test_配車のサンプルは地点データのサンプルと整合する() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     dispatch = Dispatch.model_validate(_load("dispatch.sample.json"))
     assert dispatch_errors_against_stage(dispatch, stage) == []
@@ -75,7 +75,7 @@ def test_未知の版は拒否する() -> None:
         Stage.model_validate(data)
 
 
-def test_舞台にない地点や別の区域を指す配車は誤りとして挙げる() -> None:
+def test_地点データにない地点や別の区域を指す配車は誤りとして挙げる() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     data = _load("dispatch.sample.json")
     data["pods"][0]["timeline"][0]["spot_id"] = "NOPE"
@@ -85,7 +85,7 @@ def test_舞台にない地点や別の区域を指す配車は誤りとして�
     assert any("shibuya" in e for e in errors)
 
 
-def test_JITAIの集計のサンプルは舞台のサンプルと整合する() -> None:
+def test_JITAIの集計のサンプルは地点データのサンプルと整合する() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     summary = JitaiSummary.model_validate(_load("jitai-summary.sample.json"))
     assert jitai_summary_errors_against_stage(summary, stage) == []
@@ -113,7 +113,7 @@ def test_JITAIの集計は個人の記録を持てない() -> None:
         JitaiSummary.model_validate(data)
 
 
-def test_JITAIの集計の区画の原点が舞台の区域と違えば誤りとして挙げる() -> None:
+def test_JITAIの集計の区画の原点が地点データの区域と違えば誤りとして挙げる() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     data = _load("jitai-summary.sample.json")
     data["grid"]["origin_lon"] = 139.0

@@ -55,7 +55,7 @@ class WorkerModel:
     episode_minutes: tuple[int, int] = (20, 60)
     meetings_per_day: float = 4.0
     calibration_days: int = 5  # 個人の基準を当てはめる過去の勤務日
-    office_radius_m: float = 300.0  # 勤務地は、舞台の地点からこの範囲に置く
+    office_radius_m: float = 300.0  # 勤務地は、地点データの地点からこの範囲に置く
 
 
 @dataclass(frozen=True, eq=False)
@@ -63,7 +63,7 @@ class Worker:
     id: str
     lat: float
     lon: float
-    home_spot_id: str  # 勤務地に最も近い舞台の地点（需要の集計と道中の PET に使う）
+    home_spot_id: str  # 勤務地に最も近い地点データの地点（需要の集計と道中の PET に使う）
     calibration_ln_hf: FloatArray  # (calibration_days, 窓の数)。過去の勤務日
     ln_hf: FloatArray  # (窓の数,)。当日
     episodes: tuple[Episode, ...]  # 当日のエピソード（検知の評価に使う真の値）
