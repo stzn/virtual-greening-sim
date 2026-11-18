@@ -20,7 +20,7 @@ def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser
     d.add_argument("--stage", type=Path, required=True, help="舞台の stage.json")
     d.add_argument("--scenario", default="heatwave", choices=["heatwave", "normal", "rainy"])
     d.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    d.add_argument("--policy", default="greedy", choices=["greedy", "fixed", "none"])
+    d.add_argument("--policy", default="greedy", choices=["greedy", "coverage", "fixed", "none"])
     d.add_argument("--pods", type=int, default=3, help="ポッドの台数")
     d.add_argument("--max-move-m", type=float, help="1 時間に動ける距離 [m]（既定: 1000）")
     d.add_argument(
@@ -70,8 +70,13 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     try:
         if not hours:
             raise ValueError("気象と舞台に共通の時刻がありません")
-        # 方式を比べるときは同じ初期配置から始める
-        starts = place_initial(world, pets, hours, fleet.pods, decay=fleet.pod_value_decay)
+        # 方式を比べるときは同じ初期配置（greedy の置き方）から始める。1 つの方式だけなら、
+        # その方式の置き方で始める（coverage は徒歩圏で覆える需要で置く）
+        starts = (
+            place_initial(world, pets, hours, fleet.pods, decay=fleet.pod_value_decay)
+            if args.compare
+            else None
+        )
         policies = POLICIES if args.compare else (args.policy,)
         results = {
             p: run_fleet(world, pets, weather, policy=p, fleet=fleet, initial_spots=starts)
