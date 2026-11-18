@@ -21,6 +21,7 @@ from vmgs.jitai.engine import (
     COOLDOWN_AFTER_INTERVENTION_MIN,
     Record,
     demand_cells,
+    demand_residual_counts,
     run_jitai,
 )
 from vmgs.jitai.pods import POD_SEATS, WALK_RADIUS_M, Occupancy, PodSchedule
@@ -254,6 +255,38 @@ def test_需要は徒歩圏の区画と時刻で数え_3人未満の区画を除
     assert sorted((c["spot_id"], c["hour"]) for c in cells) == [("A", 12), ("B", 12), ("D", 12)]
     assert sum(c["weight"] for c in cells) == pytest.approx(4)
     assert [c["weight"] for c in cells] == pytest.approx([4 / 3] * 3)
+
+
+def test_人数で落とした区画は時刻ごとに合算し_3人以上なら全地点に等分して足す() -> None:
+    # Given 区画 Z1（A・B）に 3 人、Z2（C）・Z3（D）・Z4（E）に 1 人ずつ（12 時）
+    zone_of = {"A": (0, 0), "B": (0, 0), "C": (5, 5), "D": (9, 9), "E": (2, 7)}
+    home = {"W0": "A", "W1": "A", "W2": "B", "W3": "C", "W4": "D", "W5": "E"}
+    recs = [_rec(12 * 60, w) for w in ("W0", "W1", "W2", "W3", "W4")]
+    recs += [_rec(12 * 60, "W5"), _rec(12 * 60 + 15, "W5")]
+    # When 数える
+    cells = demand_cells(recs, home, zone_of, min_workers=3)
+    # Then Z1 の 3 件は A・B に等分し、落とした Z2〜Z4 の 4 件（3 人）は全 5 地点に等分して足す
+    by_spot = {(c["spot_id"], c["hour"]): c["weight"] for c in cells}
+    assert by_spot == pytest.approx(
+        {("A", 12): 1.5 + 0.8, ("B", 12): 1.5 + 0.8, ("C", 12): 0.8, ("D", 12): 0.8, ("E", 12): 0.8}
+    )
+    assert sum(by_spot.values()) == pytest.approx(7)
+
+
+def test_落とした区画の合算も3人未満なら出さない() -> None:
+    zone_of = {"A": (0, 0), "C": (5, 5)}
+    home = {"W0": "A", "W1": "C"}
+    recs = [_rec(12 * 60, "W0"), _rec(12 * 60, "W1")]
+    assert demand_cells(recs, home, zone_of, min_workers=3) == []
+
+
+def test_落とした区画の合算は時刻と件数と人数だけを返す() -> None:
+    zone_of = {"A": (0, 0), "C": (5, 5), "D": (9, 9)}
+    home = {"W0": "A", "W1": "C", "W2": "D", "W3": "A"}
+    recs = [_rec(12 * 60, w) for w in ("W0", "W1", "W2")] + [_rec(13 * 60, "W3")]
+    assert demand_residual_counts(recs, home, zone_of, min_workers=3) == [
+        {"hour": 12, "count": 3, "workers": 3, "spots": 3}
+    ]
 
 
 def test_同じ区画でも時刻が違えば別に数える() -> None:

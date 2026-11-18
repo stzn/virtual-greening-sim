@@ -140,6 +140,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         DEMAND_MIN_WORKERS,
         RETRY_AFTER_SKIP_MIN,
         demand_cells,
+        demand_residual_counts,
         demand_zone_counts,
         latent_decisions,
         run_jitai,
@@ -221,7 +222,9 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
             "note": (
                 "介入しない場合の過緊張の判定点のうち予定の空いたもの（min_free_minutes 以上）を、"
                 "勤務地に近い地点の区画（一辺 zone_m）・"
-                "時刻ごとに数え、min_workers 人以上の区画・時刻だけを、区画内の地点に等分した集計値"
+                "時刻ごとに数え、min_workers 人以上の区画・時刻は区画内の地点に等分した集計値。"
+                "min_workers 人未満の区画・時刻は時刻ごとに合算し（residual）、合算で min_workers 人"
+                "以上なら全地点に等分して足す"
             ),
             "basis": "no_intervention_free_time",
             "min_workers": DEMAND_MIN_WORKERS,
@@ -234,6 +237,10 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
                     "spots": len(z["spot_ids"]),
                 }
                 for z in demand_zone_counts(latent, home, zone_of, DEMAND_MIN_WORKERS)
+            ],
+            "residual": [
+                {"hour": r["hour"], "count": r["count"], "spots": r["spots"]}
+                for r in demand_residual_counts(latent, home, zone_of, DEMAND_MIN_WORKERS)
             ],
             "cells": demand_cells(latent, home, zone_of, DEMAND_MIN_WORKERS),
         },
