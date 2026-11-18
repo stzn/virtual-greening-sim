@@ -40,7 +40,32 @@ session,subject,condition,contact_start,green,pet_c,noise_db
 P01-sit-leave-1,P01,sit-leave,2026-07-01T10:03:00+09:00,0.72,31.4,58
 ```
 
+### 追跡・出来事・環境（省略可。docs/pilot-protocol.md の 4.2・7 章）
+セッションの CSV に、追跡の時刻の列を足せます。3 つそろえて書くか、どれも書かないかにします（一部だけは止める）。
+
+| 列 | 型 | 説明 |
+| --- | --- | --- |
+| `contact_end` | 日時 or 秒 | 接触の終わり |
+| `track_start` | 日時 or 秒 | 戻った後、オフィスで追跡を始めた時刻 |
+| `track_end` | 日時 or 秒 | 追跡の終わり |
+
+順は `contact_start ≦ contact_end ≦ track_start ≦ track_end`。追跡の拍は、拍の CSV に続けて入れます。
+
+出来事の CSV（`read_recordings(..., events_path=...)`）: `session, time, event`。`event` は `talk`・`phone`・`food`・`away` のどれか。その時刻を含む追跡の窓は解析から除きます。セッションの CSV に無い session は止めます。
+
+環境の CSV（`read_environment`）: `session, time, ta_c, rh_pct, wind_ms, globe_c, laeq_db`（1 分ごと）。`contact_environment` で接触中の平均を出し、`pet_c`・`noise_db` をセッションの CSV に書く元にします（PET の計算は別）。
+
+```csv
+session,subject,condition,contact_start,green,pet_c,noise_db,contact_end,track_start,track_end
+P01-sit-leave-1,P01,sit-leave,2026-07-01T10:03:00+09:00,0.72,31.4,58,2026-07-01T10:13:00+09:00,2026-07-01T10:18:00+09:00,2026-07-01T11:13:00+09:00
+```
+```csv
+session,time,event
+P01-sit-leave-1,2026-07-01T10:41:20+09:00,phone
+```
+
 ## 解析が前提にしていること
 - 接触前に 180 秒以上の安静（基準）、接触後に 600 秒の記録があること（`study.session_curve` の既定）。
 - 外れ値の RR（300〜2000 ms の外、前後 11 拍の中央値から 20% 以上離れたもの）は除き、除いた数を `SessionCurve.n_removed` に残す。
-- 形式が合わないとき（必須の列がない、知らない条件名、session の重複）は `RecordingFormatError` で止める。
+- 形式が合わないとき（必須の列がない、知らない条件名、session の重複、追跡の時刻の一部だけ・順が逆、知らない出来事、セッションの CSV に無い session の出来事）は `RecordingFormatError` で止める。
+- 追跡の解析（`tracking.tracking_curve`）は、接触の終わりから 5〜60 分の 1 分窓を使う。帰りの 5 分、追跡の区間からはみ出す窓、出来事のある窓は NaN にする。

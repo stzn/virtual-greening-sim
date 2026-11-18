@@ -7,22 +7,19 @@
   緑の効果の 95% CI が 0 を含まなかった割合を検出力とする。
 - 持ち越し: `simulate_study` は接触の後を作らないため、この試算の中で追跡の区間を窓の値で作る
   （下の `_tracking`）。セッションの真の到達値 A が、接触の終わりから時定数 τc で減ると置く。
+  τc の当てはめと持ち越しの混合効果モデルは、実データの解析と同じ `vmgs.analysis.tracking` を使う。
   窓の推定誤差は、拍から作った合成データに `windowed_hrv` をかけて測った値を使う（`_window_noise_sd`）。
 
-API は使わない。乱数の種は固定（rep k は種 1000+k）。src のコードは変えない。
+API は使わない。乱数の種は固定（rep k は種 1000+k）。
 """
 
 import argparse
 import math
-import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-import statsmodels.formula.api as smf
-from scipy.optimize import curve_fit
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
 
 from vmgs.analysis.hrv import clean_rr, windowed_hrv
 from vmgs.analysis.mixed import fit_green_effect, session_table
@@ -30,11 +27,14 @@ from vmgs.analysis.recording import FloatArray
 from vmgs.analysis.response import fit_response
 from vmgs.analysis.study import session_curve
 from vmgs.analysis.synthetic import Design, SyntheticStudy, TrueParams, ou_process, simulate_study
+from vmgs.analysis.tracking import (
+    ENDPOINT_MIN,
+    RETURN_MIN,
+    TRACK_END_MIN,
+    fit_carry_effect,
+    fit_decay,
+)
 
-# 追跡の区間の前提（仮定。docs/pilot-protocol.md に書いたもの）
-RETURN_MIN = 5  # 接触の終わりからオフィスに戻るまで（帰りの歩行。解析から除く）
-TRACK_END_MIN = 60  # 接触の終わりから追跡の終わりまで
-ENDPOINT_MIN = (20, 40)  # 持ち越しの検出に使う区間（接触の終わりから）
 SLOW_OU_SD = 0.2  # 1 時間の単位のゆっくりした揺らぎ（JITAI の合成のワーカーと同じ仮定）
 SLOW_OU_MIN = 30.0
 BASELINE_MIN = 3
@@ -88,35 +88,18 @@ def _tracking(
     return t_min, out
 
 
-def _decay(t: FloatArray, k: float, tau_c: float) -> FloatArray:
-    y: FloatArray = k * np.exp(-t / tau_c)
-    return y
-
-
 def _fit_tau_c(t_min: FloatArray, curves: Sequence[FloatArray], track_end: int) -> float:
     """離脱した条件のセッションの平均曲線に K·e^{−t/τc} を当てはめた τc [分]。上限 600 分。"""
     use = t_min < track_end
     mean = np.mean(np.vstack(curves), axis=0)[use]
-    try:
-        params, _ = curve_fit(
-            _decay, t_min[use], mean, p0=(0.3, 30.0), bounds=([-5, 1], [5, 600]), maxfev=10000
-        )
-    except RuntimeError:
-        return float("nan")
-    return float(params[1])
+    return fit_decay(t_min[use], mean)[1]
 
 
 def _carry_effect(table: pd.DataFrame, delta: dict[str, FloatArray], t_min: FloatArray) -> float:
     """持ち越しの区間の Δ の平均を、walk + leave + (1|subject) で比べた leave の 95% CI の下限。"""
     in_ep = (t_min >= ENDPOINT_MIN[0]) & (t_min < ENDPOINT_MIN[1])
     data = table.assign(carry=[float(delta[s][in_ep].mean()) for s in table["session"]])
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", ConvergenceWarning)
-        warnings.simplefilter("ignore", UserWarning)
-        result = smf.mixedlm("carry ~ walk + leave", data, groups=data["subject"]).fit(
-            reml=True, method=["bfgs", "lbfgs", "powell"]
-        )
-    return float(result.conf_int().loc["leave"].iloc[0])
+    return fit_carry_effect(data).ci[0]
 
 
 @dataclass
