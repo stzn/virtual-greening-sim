@@ -27,7 +27,7 @@ from vmgs.jitai.detect import (
 )
 from vmgs.jitai.pods import DWELL_MIN, Occupancy, PodSchedule, walk_minutes
 from vmgs.jitai.recovery import CARRYOVER_MIN, recovery_amplitude, recovery_curve
-from vmgs.jitai.safety import PetFn, pet_check
+from vmgs.jitai.safety import RAIN_MAX_MM_H, PetFn, pet_check, rain_check
 from vmgs.jitai.workers import STEP_MIN, Worker, time_grid_min
 
 COOLDOWN_AFTER_INTERVENTION_MIN = 90
@@ -35,6 +35,7 @@ RETRY_AFTER_SKIP_MIN = 15
 DEMAND_MIN_WORKERS = 3  # 需要の集計で、これ未満の人数の区画・時刻は出さない（個人の特定を防ぐ）
 
 Outcome = Literal["intervened", "skipped"]
+# "pet" は天候の段階（雨・PET）。契約（jitai-summary.json の skipped_pet）のキーに合わせて名前は変えない
 Stage = Literal["calendar", "pods", "pet"]
 STAGES: tuple[Stage, ...] = ("calendar", "pods", "pet")
 REASONS: dict[str, Stage] = {
@@ -45,6 +46,7 @@ REASONS: dict[str, Stage] = {
     "pod_full": "pods",
     "pet_destination": "pet",
     "pet_route": "pet",
+    "rain": "pet",
 }
 
 
@@ -127,6 +129,7 @@ def _decide(
     schedule: PodSchedule,
     occupancy: Occupancy,
     pet: PetFn,
+    rain_mm: Mapping[int, float] | None = None,
 ) -> Record:
     # 段階 2: 予定の空き枠
     free = free_minutes(w.meetings, t)
@@ -149,11 +152,13 @@ def _decide(
     seated = [p for p in staying if occupancy.free(p[0].pod_id, p[1], p[2])]
     if not seated:
         return _skip(t, w, "pod_full")
-    # 段階 4: 二段階の PET 安全判定（近いポッドから順に、通るものを選ぶ）
+    # 段階 4: 天候の安全判定（雨 → 二段階の PET。近いポッドから順に、通るものを選ぶ）
     first: Record | None = None
     for c, arrive, leave, back in seated:
         hours = range(t // 60, (back - 1) // 60 + 1)
-        reason, dest, route = pet_check(pet, c.spot_id, {w.home_spot_id, c.spot_id}, hours)
+        pet_reason, dest, route = pet_check(pet, c.spot_id, {w.home_spot_id, c.spot_id}, hours)
+        rainy = rain_mm is not None and rain_check(rain_mm, hours) >= RAIN_MAX_MM_H
+        reason: str | None = "rain" if rainy else pet_reason
         if reason is None:
             occupancy.book(c.pod_id, arrive, leave)
             return Record(
@@ -183,8 +188,12 @@ def run_jitai(
     corrected: bool = True,
     recovery: bool = True,
     carryover_min: float = CARRYOVER_MIN,
+    rain_mm: Mapping[int, float] | None = None,
 ) -> JitaiResult:
-    """時刻順に判定する。recovery なら、介入のたびに回復分を後の窓の ln(HF) に足し、次の判定に反映する。"""
+    """時刻順に判定する。recovery なら、介入のたびに回復分を後の窓の ln(HF) に足し、次の判定に反映する。
+
+    rain_mm（時刻 → 降水量 [mm/h]）を渡すと、行きから帰りまでに RAIN_MAX_MM_H 以上の雨がある判定を見送る。
+    """
     t_grid = time_grid_min()
     params = TrueParams()
     profiles = {w.id: worker_profile(w, corrected=corrected) for w in workers}
@@ -200,7 +209,7 @@ def run_jitai(
         for w in workers:
             if t < next_eval[w.id] or not _flagged(z[w.id], i):
                 continue
-            rec = _decide(t, w, world, schedule, occupancy, pet)
+            rec = _decide(t, w, world, schedule, occupancy, pet, rain_mm)
             records.append(rec)
             if rec.outcome == "intervened" and recovery:
                 assert rec.walk_m is not None and rec.pet_destination_c is not None
