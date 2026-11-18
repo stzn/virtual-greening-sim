@@ -76,10 +76,21 @@ def test_離脱した条件の持ち越しは_stay_より大きいと推定す�
     table = carry_table(curves)
     assert set(table.columns) >= {"session", "subject", "walk", "leave", "carry"}
     effect = fit_carry_effect(table)
-    # 真の leave の効果（到達値 0.2 + 緑の分）は正で、20〜40 分にも残る
+    # 真の leave の効果（到達値 0.2 + 緑の分）は正で、帰った後の 5〜25 分にも残る
     assert effect.coef > 0
     assert effect.ci[0] < effect.coef < effect.ci[1]
-    assert ENDPOINT_MIN == (20, 40)
+    assert ENDPOINT_MIN == (5, 25)
+
+
+def test_持ち越しの区間を渡すと_その区間の窓だけで平均する(curves: list[TrackingCurve]) -> None:
+    # Given 既定（5〜25 分）と、10〜30 分の区間
+    default = carry_table(curves)
+    early = carry_table(curves, endpoint_min=(10, 30))
+    # Then 渡した区間の窓（中心が 10 分以上 30 分未満）だけで平均する
+    c = curves[0]
+    in_ep = (c.t_min >= 10) & (c.t_min < 30)
+    assert early["carry"].iloc[0] == pytest.approx(float(np.nanmean(c.delta_lnhf[in_ep])))
+    assert not np.allclose(early["carry"], default["carry"])
 
 
 def test_真のτc_30分の合成データから推定したτcの信頼区間は_真の値を含む(
