@@ -195,3 +195,31 @@ def test_需要の集計は配車によらない() -> None:
     cells = demand_cells(latent, home, zone_of, min_workers=1)
     assert cells
     assert cells == demand_cells(latent_decisions(workers), home, zone_of, min_workers=1)
+
+
+def test_予定の空きを求めると_介入しない場合の判定点のうち予定で見送られないものだけが残る() -> (
+    None
+):
+    from vmgs.jitai.calendar import MIN_FREE_MIN, free_minutes
+    from vmgs.jitai.engine import latent_decisions, run_jitai
+    from vmgs.jitai.workers import make_workers
+
+    stage = load_stage(SAMPLE_STAGE)
+    world = StageWorld.from_stage(stage)
+    workers = make_workers(stage, 40, seed=3)
+    by_id = {w.id: w for w in workers}
+    # Given 判定の時間帯にポッドのいない配車で回すと、予定か、ポッドの段階で見送られる
+    no_pods = _all_day(["OTM-001"], hours=range(1))
+    records = run_jitai(workers, world, no_pods, _cool_pet, recovery=False).records
+    assert {r.stage for r in records} == {"calendar", "pods"}
+    # When 予定の空きを求めて判定点を数える
+    points = latent_decisions(workers, require_free=True)
+    # Then 予定で見送られなかった判定（ポッドの段階まで進んだもの）と一致する
+    assert [(p.time_min, p.worker_id) for p in points] == [
+        (r.time_min, r.worker_id) for r in records if r.stage == "pods"
+    ]
+    assert all(
+        free_minutes(by_id[p.worker_id].meetings, p.time_min) >= MIN_FREE_MIN for p in points
+    )
+    # 予定の空きを求めない判定点の一部になっている
+    assert set(points) < set(latent_decisions(workers))

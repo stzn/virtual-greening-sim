@@ -226,13 +226,19 @@ def run_jitai(
     return JitaiResult(records, list(workers), corrected, recovery, carryover_min, windows, burden)
 
 
-def latent_decisions(workers: Sequence[Worker], *, corrected: bool = True) -> list[DecisionPoint]:
+def latent_decisions(
+    workers: Sequence[Worker], *, corrected: bool = True, require_free: bool = False
+) -> list[DecisionPoint]:
     """介入しない場合の判定点。需要はこれで数える。
 
     介入が無ければ判定は毎回見送りになり、次の判定は RETRY_AFTER_SKIP_MIN 後、回復も入らない。
     そのため判定点はワーカー（ln(HF) の系列）だけで決まり、配車・PET・予定に左右されない。
     実際の記録（介入あり）で需要を数えると、ポッドを置いた区画ほど判定が減って次の周で
     ポッドが離れ、配車と需要の反復が往復する（docs/jitai.md）。
+
+    require_free なら、予定の空きが MIN_FREE_MIN に足りない判定点（段階 2 で見送るもの）を除く。
+    予定は配車によらないので、除いても配車に左右されない。判定の間隔は除いた点でも変わらない
+    （予定で見送っても次の判定は RETRY_AFTER_SKIP_MIN 後）。
     """
     t_grid = time_grid_min()
     points: list[DecisionPoint] = []
@@ -244,7 +250,8 @@ def latent_decisions(workers: Sequence[Worker], *, corrected: bool = True) -> li
             t = int(t_np)
             if t < next_eval or not _flagged(z, i):
                 continue
-            points.append(DecisionPoint(t, w.id))
+            if not require_free or free_minutes(w.meetings, t) >= MIN_FREE_MIN:
+                points.append(DecisionPoint(t, w.id))
             next_eval = t + RETRY_AFTER_SKIP_MIN
     # run_jitai の記録と同じ順（時刻、同じ時刻ならワーカーの順）
     order = {w.id: k for k, w in enumerate(workers)}
