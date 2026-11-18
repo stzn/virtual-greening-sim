@@ -5,7 +5,7 @@
 - 周の差: 各条件で、周 r − 周 0（一様の需要 → 集計の需要）
 - 方式・台数の差: 同じ気象・seed・周で、最初の（方式, 台数）との差
 
-信頼区間はワーカーの組の違いだけを表し、舞台・気象・前提の値の不確かさは含まない。
+信頼区間はワーカーの組の違いだけを表し、地点データ・気象・前提の値の不確かさは含まない。
 
 例: uv run vmgs sweep --stage stage.json --scenarios normal heatwave --policies greedy coverage \\
         --pods 3 5 \\
@@ -292,7 +292,9 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         "sweep",
         help="気象 × 配車の方式 × ポッドの台数 × seed で vmgs loop を回し、対にした差の CI で比べる",
     )
-    sp.add_argument("--stage", type=Path, required=True, help="舞台の stage.json（上書きしない）")
+    sp.add_argument(
+        "--stage", type=Path, required=True, help="地点データの stage.json（上書きしない）"
+    )
     sp.add_argument(
         "--scenarios", nargs="+", default=["normal"], choices=["heatwave", "normal", "rainy"]
     )

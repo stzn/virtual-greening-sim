@@ -135,7 +135,7 @@
 - [x] 別のチェックリスト（倉庫の空調）で一般化を確認（table_probe、4 モデル × 種 2 つ）: 世界が行番号を渡す方式の効果は表に固有でなく、cond 118〜140 → row 170〜180/180。README の通し確認とまとめ文書の件数修正も完了。
 
 ## 移動式自然セラピーインフラ（docs/integration-plan.md）
-- [x] フェーズ 2: 役者の配車と dispatch.json（docs/dispatch.md）
+- [x] フェーズ 2: シミュレーターの配車と dispatch.json（docs/dispatch.md）
 - [x] フェーズ 5: R(t) 解析基盤（docs/analysis-synthetic.md）
 - [x] フェーズ 4: JITAI の模擬（`vmgs jitai`、docs/jitai.md）。4 段階を規則で実装、合成のワーカーで回す。BDD（feature 4 件・ユニット 17 件、Red 確認済み）、変異 5 件を検出。PET 閾値は Lin & Matzarakis 2008（目的地 38℃・道中 42℃）
   - [x] 検知の集計を stage.json の demand へ書き戻す（`vmgs demand`。地点単位では 255 地点で需要が残らないため、徒歩圏の 400 m 区画で集計）

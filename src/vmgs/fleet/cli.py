@@ -15,9 +15,9 @@ DEFAULT_OUT = Path("runs/dispatch.json")
 
 def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") -> None:
     d = sub.add_parser(
-        "dispatch", help="舞台の stage.json から複数ポッドを配車し、dispatch.json を書き出す"
+        "dispatch", help="地点データの stage.json から複数ポッドを配車し、dispatch.json を書き出す"
     )
-    d.add_argument("--stage", type=Path, required=True, help="舞台の stage.json")
+    d.add_argument("--stage", type=Path, required=True, help="地点データの stage.json")
     d.add_argument("--scenario", default="heatwave", choices=["heatwave", "normal", "rainy"])
     d.add_argument("--out", type=Path, default=DEFAULT_OUT)
     d.add_argument(
@@ -74,7 +74,7 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     hours = sorted(set(weather) & world.hours)
     try:
         if not hours:
-            raise ValueError("気象と舞台に共通の時刻がありません")
+            raise ValueError("気象と地点データに共通の時刻がありません")
         # 方式を比べるときは同じ初期配置（greedy の置き方）から始める。1 つの方式だけなら、
         # その方式の置き方で始める（coverage は徒歩圏で覆える需要で置く）
         starts = (
@@ -94,11 +94,12 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     result = results[args.policy]
     generator = f"{_git_version()} {args.policy}"
     if world.uses_default_demand:
-        generator += " default-demand"  # 舞台に需要が無く、既定の需要（8〜19 時に一様）を使った
+        # 地点データに需要が無く、既定の需要（8〜19 時に一様）を使った
+        generator += " default-demand"
     dispatch = to_dispatch(result, stage, generator=generator, scenario=args.scenario)
     errors = dispatch_errors_against_stage(dispatch, stage)
     if errors:
-        print("配車が舞台と食い違います:", *errors, sep="\n  ", file=sys.stderr)
+        print("配車が地点データと食い違います:", *errors, sep="\n  ", file=sys.stderr)
         return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(
@@ -110,7 +111,7 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
         f"{args.policy}・移動 {result.moves} 回）"
     )
     if world.uses_default_demand:
-        print("注意: 舞台に需要が無いため、8〜19 時に全地点で一様の需要を仮定した")
+        print("注意: 地点データに需要が無いため、8〜19 時に全地点で一様の需要を仮定した")
     if args.compare:
         rows = [no_pod_summary(world, pets, hours)]
         rows += [summarize(results[p], world, pets) for p in POLICIES]

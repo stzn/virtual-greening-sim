@@ -19,7 +19,7 @@ def ctx() -> dict[str, Any]:
     return {}
 
 
-@given(parsers.parse('サンプルの舞台 "{stage}" がある'))
+@given(parsers.parse('サンプルの地点データ "{stage}" がある'))
 def _g_stage(ctx: dict[str, Any], stage: str) -> None:
     ctx["stage"] = ROOT / stage
 

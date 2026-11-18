@@ -13,7 +13,7 @@ from vmgs.world.spots import Spot
 
 EARTH_RADIUS_M = 6_371_000.0
 
-# stage.json に需要（demand）が 1 件も無いとき（舞台の v1 の出力）に使う既定の需要。
+# stage.json に需要（demand）が 1 件も無いとき（地図アプリの v1 の出力）に使う既定の需要。
 # 勤務時間帯（8〜19 時）に全地点で 1.0。集計した需要が来たら使わない。
 DEFAULT_DEMAND_HOURS = tuple(range(8, 20))
 DEFAULT_DEMAND_WEIGHT = 1.0
@@ -53,7 +53,7 @@ def load_stage(path: Path) -> Stage:
 
 
 class StageWorld:
-    """舞台の地点の集まり。時刻ごとの日射係数は 1 − shade_fraction。"""
+    """地点データの地点の集まり。時刻ごとの日射係数は 1 − shade_fraction。"""
 
     def __init__(self, stage: Stage) -> None:
         self.stage = stage

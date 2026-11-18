@@ -1,4 +1,4 @@
-"""舞台の地点での複数ポッドの配車（vmgs dispatch）。"""
+"""地点データの地点での複数ポッドの配車（vmgs dispatch）。"""
 
 import re
 from pathlib import Path
@@ -20,7 +20,7 @@ def ctx() -> dict[str, Any]:
     return {}
 
 
-@given(parsers.parse('サンプルの舞台 "{path}" がある'))
+@given(parsers.parse('サンプルの地点データ "{path}" がある'))
 def _g_stage(ctx: dict[str, Any], path: str) -> None:
     ctx["stage"] = ROOT / path
 
@@ -73,7 +73,7 @@ def _t_code(ctx: dict[str, Any], code: int) -> None:
     assert ctx["code"] == code, ctx["stderr"]
 
 
-@then("書き出した配車は契約 v1 に合い、舞台との食い違いが無い")
+@then("書き出した配車は契約 v1 に合い、地点データとの食い違いが無い")
 def _t_contract(ctx: dict[str, Any]) -> None:
     dispatch = Dispatch.model_validate_json(ctx["out"].read_text(encoding="utf-8"))
     stage = Stage.model_validate_json(ctx["stage"].read_text(encoding="utf-8"))

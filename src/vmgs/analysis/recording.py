@@ -27,7 +27,7 @@ class Recording:
     subject: str
     condition: str
     green: float  # 緑の量（0〜1。緑視率などの割合）
-    pet_c: float  # 体感温度 PET [°C]（役者側のフェーズ 2 で計算したものを入力として受け取る）
+    pet_c: float  # 体感温度 PET [°C]（シミュレーター側のフェーズ 2 で計算したものを入力として受け取る）
     noise_db: float  # 騒音 [dB(A)]
     beat_times_s: FloatArray
     rr_ms: FloatArray

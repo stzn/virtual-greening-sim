@@ -1,8 +1,8 @@
-"""舞台（tokyo-green-simulator）と役者（本リポジトリ）のデータ契約 v1。
+"""地図アプリ（tokyo-green-simulator）とシミュレーター（本リポジトリ）のデータ契約 v1。
 
-- stage.json   : 舞台 → 役者。候補地点ごとの、時間別の日射遮蔽率・天空率・緑の文脈・需要
-- dispatch.json: 役者 → 舞台。ポッドの時刻別の位置・行動と、地点ごとの快適度（PET）
-- jitai-summary.json: 役者 → 舞台。JITAI の判定・介入・見送りを、徒歩圏の区画 × 時刻で数えた集計値
+- stage.json   : 地図アプリ → シミュレーター。候補地点ごとの、時間別の日射遮蔽率・天空率・緑の文脈・需要
+- dispatch.json: シミュレーター → 地図アプリ。ポッドの時刻別の位置・行動と、地点ごとの快適度（PET）
+- jitai-summary.json: シミュレーター → 地図アプリ。JITAI の判定・介入・見送りを、徒歩圏の区画 × 時刻で数えた集計値
 
 正本はこのモジュール。`uv run python -m vmgs.contracts` で contracts/*.schema.json を書き出し、
 tokyo-green-simulator の contracts/ へ同じファイルを写す（両リポジトリのテストが同じサンプルで検証する）。
@@ -46,7 +46,7 @@ class Area(_Strict):
 
 
 class GreenContext(_Strict):
-    """地点まわりの緑（舞台の computeGreenContext と同じ数え方）。"""
+    """地点まわりの緑（地点データの computeGreenContext と同じ数え方）。"""
 
     radius_m: float = Field(gt=0)
     trees_all: int = Field(ge=0)
@@ -98,7 +98,7 @@ class Stage(_Strict):
     date: dt.date = Field(description="日影を計算した日（太陽位置の基準）")
     timezone: Literal["Asia/Tokyo"]
     generator: str = Field(
-        description="書き出した舞台の版など（例: tokyo-green-simulator@abc1234）"
+        description="書き出した地図アプリの版など（例: tokyo-green-simulator@abc1234）"
     )
     spots: list[StageSpot] = Field(min_length=1)
 
@@ -143,7 +143,9 @@ class StageRef(_Strict):
 class Dispatch(_Strict):
     schema_version: Literal["1"]
     stage_ref: StageRef
-    generator: str = Field(description="書き出した役者の版と配車方式（例: vmgs@abc1234 greedy）")
+    generator: str = Field(
+        description="書き出したシミュレーターの版と配車方式（例: vmgs@abc1234 greedy）"
+    )
     weather_scenario: str = Field(description="使った気象（例: heatwave）")
     pods: list[Pod] = Field(min_length=1)
     comfort: list[SpotComfort] = Field(default_factory=list)
@@ -155,18 +157,20 @@ class Dispatch(_Strict):
 
 
 def dispatch_errors_against_stage(dispatch: Dispatch, stage: Stage) -> list[str]:
-    """配車が舞台と食い違う点を挙げる（区域・日付・未知の地点・地点の容量超過）。"""
+    """配車が地点データと食い違う点を挙げる（区域・日付・未知の地点・地点の容量超過）。"""
     errors: list[str] = []
     if dispatch.stage_ref.area_id != stage.area.id:
-        errors.append(f"区域が違う: 配車 {dispatch.stage_ref.area_id}、舞台 {stage.area.id}")
+        errors.append(f"区域が違う: 配車 {dispatch.stage_ref.area_id}、地点データ {stage.area.id}")
     if dispatch.stage_ref.date != stage.date:
-        errors.append(f"日付が違う: 配車 {dispatch.stage_ref.date}、舞台 {stage.date}")
+        errors.append(f"日付が違う: 配車 {dispatch.stage_ref.date}、地点データ {stage.date}")
     capacity = {s.id: s.capacity_pods for s in stage.spots}
     used: dict[tuple[str, int], int] = {}
     for pod in dispatch.pods:
         for step in pod.timeline:
             if step.spot_id not in capacity:
-                errors.append(f"舞台にない地点: ポッド {pod.id} の {step.hour} 時 {step.spot_id}")
+                errors.append(
+                    f"地点データにない地点: ポッド {pod.id} の {step.hour} 時 {step.spot_id}"
+                )
                 continue
             key = (step.spot_id, step.hour)
             used[key] = used.get(key, 0) + 1
@@ -175,7 +179,7 @@ def dispatch_errors_against_stage(dispatch: Dispatch, stage: Stage) -> list[str]
             errors.append(f"容量超過: {spot_id} の {hour} 時に {n} 台（容量 {capacity[spot_id]}）")
     for c in dispatch.comfort:
         if c.spot_id not in capacity:
-            errors.append(f"舞台にない地点の快適度: {c.spot_id}")
+            errors.append(f"地点データにない地点の快適度: {c.spot_id}")
     return errors
 
 
@@ -215,7 +219,7 @@ class RecoveryInfo(_Strict):
 
 
 class JitaiSummary(_Strict):
-    """JITAI の集計（役者 → 舞台）。min_workers 人未満の区画・時刻は入れない。個人の記録は持たない。"""
+    """JITAI の集計（シミュレーター → 地図アプリ）。min_workers 人未満の区画・時刻は入れない。個人の記録は持たない。"""
 
     schema_version: Literal["1"]
     stage_ref: StageRef
@@ -235,17 +239,17 @@ class JitaiSummary(_Strict):
 
 
 def jitai_summary_errors_against_stage(summary: JitaiSummary, stage: Stage) -> list[str]:
-    """JITAI の集計が舞台と食い違う点を挙げる（区域・日付・区画の原点）。"""
+    """JITAI の集計が地点データと食い違う点を挙げる（区域・日付・区画の原点）。"""
     errors: list[str] = []
     if summary.stage_ref.area_id != stage.area.id:
-        errors.append(f"区域が違う: 集計 {summary.stage_ref.area_id}、舞台 {stage.area.id}")
+        errors.append(f"区域が違う: 集計 {summary.stage_ref.area_id}、地点データ {stage.area.id}")
     if summary.stage_ref.date != stage.date:
-        errors.append(f"日付が違う: 集計 {summary.stage_ref.date}、舞台 {stage.date}")
+        errors.append(f"日付が違う: 集計 {summary.stage_ref.date}、地点データ {stage.date}")
     west, south, _east, _north = stage.area.bbox
     if (summary.grid.origin_lon, summary.grid.origin_lat) != (west, south):
         errors.append(
             f"区画の原点が区域の南西の角と違う: 集計 ({summary.grid.origin_lon}, "
-            f"{summary.grid.origin_lat})、舞台 ({west}, {south})"
+            f"{summary.grid.origin_lat})、地点データ ({west}, {south})"
         )
     return errors
 

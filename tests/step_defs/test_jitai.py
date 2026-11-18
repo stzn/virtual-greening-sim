@@ -22,7 +22,7 @@ def ctx() -> dict[str, Any]:
     return {}
 
 
-@given(parsers.parse('サンプルの舞台 "{stage}" と配車 "{dispatch}" がある'))
+@given(parsers.parse('サンプルの地点データ "{stage}" と配車 "{dispatch}" がある'))
 def _g_inputs(ctx: dict[str, Any], stage: str, dispatch: str) -> None:
     ctx["stage"], ctx["dispatch"] = ROOT / stage, ROOT / dispatch
 
@@ -210,7 +210,7 @@ def _t_demand(ctx: dict[str, Any]) -> None:
         assert res["count"] >= 3
 
 
-@when("JITAI の需要を舞台に書き戻す")
+@when("JITAI の需要を地点データに書き戻す")
 def _w_writeback(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     jitai = tmp_path / "jitai.json"
     ctx["demand_stage"] = tmp_path / "stage.demand.json"
@@ -233,7 +233,7 @@ def _t_writeback_code(ctx: dict[str, Any]) -> None:
     assert ctx["demand_code"] == 0, ctx["demand_stderr"]
 
 
-@then("書き戻した舞台の需要は、JITAI の需要の集計と一致する")
+@then("書き戻した地点データの需要は、JITAI の需要の集計と一致する")
 def _t_writeback_matches(ctx: dict[str, Any]) -> None:
     stage = json.loads(ctx["demand_stage"].read_text(encoding="utf-8"))
     written = sorted((s["id"], d["hour"], d["weight"]) for s in stage["spots"] for d in s["demand"])
@@ -241,7 +241,7 @@ def _t_writeback_matches(ctx: dict[str, Any]) -> None:
     assert written == cells and cells
 
 
-@when("書き戻した舞台で配車する")
+@when("書き戻した地点データで配車する")
 def _w_dispatch(ctx: dict[str, Any], tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     out = tmp_path / "dispatch.demand.json"
     code = cli.main(

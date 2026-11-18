@@ -23,7 +23,7 @@ def _jitai_out(
 
 
 def test_集計した需要を地点ごとに時刻順で書き込み_他の地点は空にする() -> None:
-    # Given 舞台のサンプルと、2 地点の集計 / When 書き戻す
+    # Given 地点データのサンプルと、2 地点の集計 / When 書き戻す
     stage = load_stage(SAMPLE_STAGE)
     out = apply_demand(
         stage,
@@ -55,7 +55,7 @@ def test_既存の需要は足し合わせず置き換える() -> None:
     assert out.spots[2].demand == []
 
 
-def test_書き戻した舞台では配車が既定の需要を使わない() -> None:
+def test_書き戻した地点データでは配車が既定の需要を使わない() -> None:
     out = apply_demand(
         load_stage(SAMPLE_STAGE), _jitai_out([{"spot_id": "OTM-001", "hour": 12, "weight": 2}])
     )
@@ -65,7 +65,7 @@ def test_書き戻した舞台では配車が既定の需要を使わない() ->
     assert world.demand("OTM-002", 12) == 0
 
 
-def test_書き戻した舞台は契約のスキーマで検証できる() -> None:
+def test_書き戻した地点データは契約のスキーマで検証できる() -> None:
     out = apply_demand(
         load_stage(SAMPLE_STAGE), _jitai_out([{"spot_id": "OTM-003", "hour": 8, "weight": 1}])
     )
@@ -83,9 +83,11 @@ def test_書き戻した舞台は契約のスキーマで検証できる() -> No
         (_jitai_out([{"spot_id": "NOPE", "hour": 12, "weight": 1}]), "NOPE"),
         (_jitai_out([]), "空"),
     ],
-    ids=["別の区域", "別の日付", "舞台にない地点", "集計が空"],
+    ids=["別の区域", "別の日付", "地点データにない地点", "集計が空"],
 )
-def test_舞台と食い違う集計や空の集計は書き戻さない(jitai: dict[str, Any], needle: str) -> None:
+def test_地点データと食い違う集計や空の集計は書き戻さない(
+    jitai: dict[str, Any], needle: str
+) -> None:
     # 集計が空のまま書き戻すと、配車が黙って既定の需要に戻るので拒否する
     with pytest.raises(ValueError, match=needle):
         apply_demand(load_stage(SAMPLE_STAGE), jitai)
