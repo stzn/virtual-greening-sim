@@ -39,6 +39,9 @@ def add_jitai_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
         help="帰った後に回復が減る時定数 [分]（既定: 30。根拠のない仮の値）",
     )
     j.add_argument(
+        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+    )
+    j.add_argument(
         "--messages", action="store_true", help="介入した記録に通知文（message）を付ける"
     )
     j.add_argument(
@@ -189,6 +192,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         recovery=not args.no_recovery,
         carryover_min=carryover,
         rain_mm={h: r.precipitation_mm for h, r in weather.items()},
+        rain_cover=args.rain_cover,
     )
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
@@ -212,7 +216,8 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
             "pod_seats": pods.POD_SEATS,
             "destination_pet_max_c": safety.DEST_PET_MAX_C,
             "route_pet_max_c": safety.ROUTE_PET_MAX_C,
-            "rain_max_mm_per_h": safety.RAIN_MAX_MM_H,
+            "rain_cover": args.rain_cover,
+            "rain_max_mm_per_h": safety.rain_limit(rain_cover=args.rain_cover),
             "cooldown_after_intervention_minutes": COOLDOWN_AFTER_INTERVENTION_MIN,
             "retry_after_skip_minutes": RETRY_AFTER_SKIP_MIN,
             "recovery": not args.no_recovery,

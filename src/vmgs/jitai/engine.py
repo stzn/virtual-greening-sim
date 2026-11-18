@@ -27,7 +27,7 @@ from vmgs.jitai.detect import (
 )
 from vmgs.jitai.pods import DWELL_MIN, Occupancy, PodSchedule, walk_minutes
 from vmgs.jitai.recovery import CARRYOVER_MIN, recovery_amplitude, recovery_curve
-from vmgs.jitai.safety import RAIN_MAX_MM_H, PetFn, pet_check, rain_check
+from vmgs.jitai.safety import PetFn, pet_check, rain_check, rain_limit
 from vmgs.jitai.workers import STEP_MIN, Worker, time_grid_min
 
 COOLDOWN_AFTER_INTERVENTION_MIN = 90
@@ -130,6 +130,7 @@ def _decide(
     occupancy: Occupancy,
     pet: PetFn,
     rain_mm: Mapping[int, float] | None = None,
+    rain_cover: bool = False,
 ) -> Record:
     # 段階 2: 予定の空き枠
     free = free_minutes(w.meetings, t)
@@ -157,7 +158,9 @@ def _decide(
     for c, arrive, leave, back in seated:
         hours = range(t // 60, (back - 1) // 60 + 1)
         pet_reason, dest, route = pet_check(pet, c.spot_id, {w.home_spot_id, c.spot_id}, hours)
-        rainy = rain_mm is not None and rain_check(rain_mm, hours) >= RAIN_MAX_MM_H
+        rainy = rain_mm is not None and rain_check(rain_mm, hours) >= rain_limit(
+            rain_cover=rain_cover
+        )
         reason: str | None = "rain" if rainy else pet_reason
         if reason is None:
             occupancy.book(c.pod_id, arrive, leave)
@@ -189,10 +192,12 @@ def run_jitai(
     recovery: bool = True,
     carryover_min: float = CARRYOVER_MIN,
     rain_mm: Mapping[int, float] | None = None,
+    rain_cover: bool = False,
 ) -> JitaiResult:
     """時刻順に判定する。recovery なら、介入のたびに回復分を後の窓の ln(HF) に足し、次の判定に反映する。
 
-    rain_mm（時刻 → 降水量 [mm/h]）を渡すと、行きから帰りまでに RAIN_MAX_MM_H 以上の雨がある判定を見送る。
+    rain_mm（時刻 → 降水量 [mm/h]）を渡すと、行きから帰りまでに基準以上の雨がある判定を見送る。
+    基準は RAIN_MAX_MM_H、rain_cover（ポッドに雨よけあり）なら RAIN_COVER_MAX_MM_H。
     """
     t_grid = time_grid_min()
     params = TrueParams()
@@ -209,7 +214,7 @@ def run_jitai(
         for w in workers:
             if t < next_eval[w.id] or not _flagged(z[w.id], i):
                 continue
-            rec = _decide(t, w, world, schedule, occupancy, pet, rain_mm)
+            rec = _decide(t, w, world, schedule, occupancy, pet, rain_mm, rain_cover)
             records.append(rec)
             if rec.outcome == "intervened" and recovery:
                 assert rec.walk_m is not None and rec.pet_destination_c is not None

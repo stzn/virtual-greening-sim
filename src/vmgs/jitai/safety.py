@@ -14,6 +14,8 @@
 - 道中（日向を片道 5 分以内歩く）: 短時間なので強い暑熱ストレスまでは許し、極度（42℃）で止める。
 - 雨: 行きから帰りまでのどの時刻も 1 mm/h 未満（傘が要る雨では見送る）。屋外のポッドで 10 分座って
   休むので、弱い雨でも勧めない。降水確率ではなく、その時刻の降水量で見る。
+  ポッドに雨よけ（屋根）があるときは、座る間は雨を問わず、行き帰りを傘で歩ける 5 mm/h 未満なら勧める
+  （仮の値。「やや強い雨」10 mm/h の手前とした）。
 根拠と限界は docs/jitai.md。
 """
 
@@ -23,6 +25,7 @@ from typing import Literal, Protocol
 DEST_PET_MAX_C = 38.0
 ROUTE_PET_MAX_C = 42.0
 RAIN_MAX_MM_H = 1.0
+RAIN_COVER_MAX_MM_H = 5.0
 
 PetReason = Literal["pet_destination", "pet_route"]
 
@@ -45,6 +48,11 @@ def pet_check(
     if route >= ROUTE_PET_MAX_C:
         return "pet_route", dest, route
     return None, dest, route
+
+
+def rain_limit(*, rain_cover: bool) -> float:
+    """見送る降水量の基準 [mm/h]。ポッドに雨よけがあれば、行き帰りを傘で歩ける強さまで許す。"""
+    return RAIN_COVER_MAX_MM_H if rain_cover else RAIN_MAX_MM_H
 
 
 def rain_check(rain_mm: Mapping[int, float], hours: Iterable[int]) -> float:

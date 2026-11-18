@@ -64,6 +64,7 @@ def _fake_loop(calls: list[argparse.Namespace]):  # type: ignore[no-untyped-def]
             "seed": args.seed,
             "pods": args.pods,
             "policy": args.policy,
+            "rain_cover": args.rain_cover,
             "rounds": rows,
         }
         (args.out_dir / "summary.json").write_text(json.dumps(meta), encoding="utf-8")
@@ -103,6 +104,9 @@ def test_同じ引数の実行は回し直さず_違えば回し直す(
     # 方式が違っても回し直す
     sweep.run_job(_job(tmp_path, workers=40, policy="coverage"), tmp_path)
     assert len(calls) == 3 and calls[-1].policy == "coverage"
+    # 雨よけの有無が違っても回し直し、loop に渡す
+    sweep.run_job(_job(tmp_path, workers=40, policy="coverage", rain_cover=True), tmp_path)
+    assert len(calls) == 4 and calls[-1].rain_cover is True
 
 
 def test_集計は周の差と_方式と台数の差を_seedで対にして出す() -> None:
