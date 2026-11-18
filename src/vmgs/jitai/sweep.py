@@ -299,7 +299,7 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     sp.add_argument(
         "--policies",
         nargs="+",
-        default=["greedy"],
+        default=["coverage"],
         choices=["greedy", "coverage"],
         help="配車の方式（複数可。最初の方式が比べる基準）",
     )

@@ -24,7 +24,7 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
     lp.add_argument("--pods", type=int, default=3, help="ポッドの台数")
     lp.add_argument(
         "--policy",
-        default="greedy",
+        default="coverage",
         choices=["greedy", "coverage"],
         help="配車の方式（coverage: 徒歩圏で覆える需要を見る）",
     )
