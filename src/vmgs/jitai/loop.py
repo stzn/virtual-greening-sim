@@ -33,7 +33,10 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
     lp.add_argument("--rounds", type=int, default=1, help="需要を書き戻して配車し直す回数")
     lp.add_argument("--no-recovery", action="store_true", help="介入後の回復を反映しない")
     lp.add_argument(
-        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+        "--rain-cover",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
     lp.add_argument("--carryover-min", type=float, default=None, help="回復の持ち越しの時定数 [分]")
     lp.add_argument("--out-dir", type=Path, required=True)

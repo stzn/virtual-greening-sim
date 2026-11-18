@@ -130,7 +130,7 @@ def _decide(
     occupancy: Occupancy,
     pet: PetFn,
     rain_mm: Mapping[int, float] | None = None,
-    rain_cover: bool = False,
+    rain_cover: bool = True,
 ) -> Record:
     # 段階 2: 予定の空き枠
     free = free_minutes(w.meetings, t)
@@ -192,7 +192,7 @@ def run_jitai(
     recovery: bool = True,
     carryover_min: float = CARRYOVER_MIN,
     rain_mm: Mapping[int, float] | None = None,
-    rain_cover: bool = False,
+    rain_cover: bool = True,
 ) -> JitaiResult:
     """時刻順に判定する。recovery なら、介入のたびに回復分を後の窓の ln(HF) に足し、次の判定に反映する。
 

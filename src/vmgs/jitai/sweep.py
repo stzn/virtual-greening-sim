@@ -93,7 +93,7 @@ class Job:
     workers: int
     rounds: int
     out_dir: Path
-    rain_cover: bool = False
+    rain_cover: bool = True
 
 
 def _matches(meta: Mapping[str, Any], job: Job) -> bool:
@@ -314,7 +314,10 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     sp.add_argument("--rounds", type=int, default=1, help="vmgs loop の周回数")
     sp.add_argument("--jobs", type=int, default=1, help="並列に回す数")
     sp.add_argument(
-        "--rain-cover", action="store_true", help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）"
+        "--rain-cover",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ポッドに雨よけあり（5 mm/h 未満の雨なら勧める。既定。--no-rain-cover で無し: 1 mm/h 未満）",
     )
     sp.add_argument("--out-dir", type=Path, required=True)
 
@@ -380,8 +383,8 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
         json.dumps(meta, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
     table = _markdown(summary)
-    if args.rain_cover:
-        table = "ポッドに雨よけあり（5 mm/h 未満の雨なら勧める）\n\n" + table
+    if not args.rain_cover:
+        table = "ポッドに雨よけ無し（1 mm/h 以上の雨では勧めない）\n\n" + table
     (out / "summary.md").write_text(table + "\n", encoding="utf-8")
     print(table)
     return 0

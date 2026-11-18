@@ -74,6 +74,18 @@ def _w_run(
     _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, [])
 
 
+@when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を雨よけ無しで回す'))
+def _w_run_no_cover(
+    ctx: dict[str, Any],
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    scenario: str,
+    n: int,
+) -> None:
+    _run(ctx, tmp_path, capsys, monkeypatch, scenario, n, ["--no-rain-cover"])
+
+
 @when(parsers.parse('気象 "{scenario}" でワーカー {n:d} 人の JITAI を通知文つきで回す'))
 def _w_run_messages(
     ctx: dict[str, Any],
@@ -186,9 +198,10 @@ def _t_no_interventions(ctx: dict[str, Any]) -> None:
     assert ctx["result"]["summary"]["interventions"] == 0
 
 
-@then("記録の規則に、雨のしきい値 1 mm/h がある")
-def _t_rain_rule(ctx: dict[str, Any]) -> None:
-    assert ctx["result"]["rules"]["rain_max_mm_per_h"] == 1.0
+@then(parsers.parse("記録の規則に、雨よけ{cover}・雨のしきい値 {mm:d} mm/h がある"))
+def _t_rain_rule(ctx: dict[str, Any], cover: str, mm: int) -> None:
+    assert ctx["result"]["rules"]["rain_cover"] is (cover == "有り")
+    assert ctx["result"]["rules"]["rain_max_mm_per_h"] == float(mm)
 
 
 @then("出力に HRV の値が含まれない")

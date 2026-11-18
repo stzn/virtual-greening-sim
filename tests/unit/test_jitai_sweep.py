@@ -105,8 +105,25 @@ def test_同じ引数の実行は回し直さず_違えば回し直す(
     sweep.run_job(_job(tmp_path, workers=40, policy="coverage"), tmp_path)
     assert len(calls) == 3 and calls[-1].policy == "coverage"
     # 雨よけの有無が違っても回し直し、loop に渡す
-    sweep.run_job(_job(tmp_path, workers=40, policy="coverage", rain_cover=True), tmp_path)
-    assert len(calls) == 4 and calls[-1].rain_cover is True
+    sweep.run_job(_job(tmp_path, workers=40, policy="coverage", rain_cover=False), tmp_path)
+    assert len(calls) == 4 and calls[-1].rain_cover is False
+
+
+def test_雨よけの記録が無い古い結果は雨よけ無しとみなし_既定の雨よけ有りでは回し直す(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[argparse.Namespace] = []
+    monkeypatch.setattr(loop, "cmd_loop", _fake_loop(calls))
+    # Given 雨よけ無しの古い結果（summary.json に rain_cover が無い）
+    sweep.run_job(_job(tmp_path, rain_cover=False), tmp_path)
+    meta_path = tmp_path / "out" / "summary.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    del meta["rain_cover"]
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    # When 既定（雨よけ有り）の Job で回す / Then 回し直し、雨よけ有りを loop に渡す
+    assert _job(tmp_path).rain_cover is True
+    sweep.run_job(_job(tmp_path), tmp_path)
+    assert len(calls) == 2 and calls[-1].rain_cover is True
 
 
 def test_集計は周の差と_方式と台数の差を_seedで対にして出す() -> None:
