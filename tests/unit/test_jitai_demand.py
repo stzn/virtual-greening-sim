@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from vmgs.contracts import DemandHour, Stage
+from vmgs.contracts import DemandHour, Dispatch, Pod, PodStep, Stage, StageRef
 from vmgs.fleet.stage_world import StageWorld, load_stage
 from vmgs.jitai.demand import apply_demand
 
@@ -128,3 +128,70 @@ def test_区画と時刻ごとに判定_介入_段階別の見送りを数え_3�
             "skipped_pet": 1,
         }
     ]
+
+
+# --- 介入しない場合の判定点（需要の元） ---
+
+
+def _all_day(spot_ids: list[str], hours: range = range(24)) -> Dispatch:
+    stage = load_stage(SAMPLE_STAGE)
+    return Dispatch(
+        schema_version="1",
+        generator="test",
+        stage_ref=StageRef(area_id=stage.area.id, date=stage.date),
+        weather_scenario="normal",
+        pods=[
+            Pod(
+                id=f"P{i}",
+                timeline=[
+                    PodStep(hour=h, spot_id=sid, action="stay", plant_health=1.0) for h in hours
+                ],
+            )
+            for i, sid in enumerate(spot_ids)
+        ],
+        comfort=[],
+    )
+
+
+def _cool_pet(spot_id: str, hour: int, *, covered: bool) -> float:
+    return 25.0  # どこでも閾値より低い（PET で見送らない）
+
+
+def test_介入しない場合の判定点は_ポッドの無い配車で回した判定と一致する() -> None:
+    from vmgs.jitai.engine import latent_decisions, run_jitai
+    from vmgs.jitai.workers import make_workers
+
+    stage = load_stage(SAMPLE_STAGE)
+    world = StageWorld.from_stage(stage)
+    workers = make_workers(stage, 40, seed=3)
+    # Given 判定の時間帯（8〜19 時）にポッドがいない配車（全員が見送りになる） / When 回す
+    # （契約ではポッドを 1 台以上置くので、0 時だけいるポッドにする）
+    no_pods = _all_day(["OTM-001"], hours=range(1))
+    result = run_jitai(workers, world, no_pods, _cool_pet, recovery=False)
+    assert result.records and all(r.outcome == "skipped" for r in result.records)
+    # Then 介入しない場合の判定点と、時刻・ワーカーが一致する
+    expected = [(r.time_min, r.worker_id) for r in result.records]
+    assert [(p.time_min, p.worker_id) for p in latent_decisions(workers)] == expected
+
+
+def test_需要の集計は配車によらない() -> None:
+    from vmgs.jitai.demand import DEMAND_ZONE_M, demand_zones
+    from vmgs.jitai.engine import demand_cells, latent_decisions, run_jitai
+    from vmgs.jitai.workers import make_workers
+
+    stage = load_stage(SAMPLE_STAGE)
+    world = StageWorld.from_stage(stage)
+    workers = make_workers(stage, 60, seed=5)
+    home = {w.id: w.home_spot_id for w in workers}
+    zone_of = demand_zones(stage, DEMAND_ZONE_M)
+    # Given 全地点に終日ポッドがいる配車では介入が起き、判定点が介入なしと変わる
+    busy = run_jitai(workers, world, _all_day([s.id for s in stage.spots]), _cool_pet)
+    assert any(r.outcome == "intervened" for r in busy.records)
+    latent = latent_decisions(workers)
+    assert [(r.time_min, r.worker_id) for r in busy.records] != [
+        (p.time_min, p.worker_id) for p in latent
+    ]
+    # Then 需要（介入しない場合の判定点の集計）は、配車の結果を見ずに決まる
+    cells = demand_cells(latent, home, zone_of, min_workers=1)
+    assert cells
+    assert cells == demand_cells(latent_decisions(workers), home, zone_of, min_workers=1)

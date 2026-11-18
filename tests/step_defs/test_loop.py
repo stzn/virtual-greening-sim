@@ -107,3 +107,18 @@ def _t_table(ctx: dict[str, Any]) -> None:
         } <= set(r)
     md = (ctx["out"] / "summary.md").read_text(encoding="utf-8")
     assert "介入率" in md and "過緊張の窓" in md
+
+
+@then("周 1 と周 2 の舞台は同じになる")
+def _t_fixed_point(ctx: dict[str, Any]) -> None:
+    # 需要が配車の結果に左右されなければ、周 1 の需要の集計は周 2 でも変わらない
+    r1 = (ctx["out"] / "stage.r1.json").read_text(encoding="utf-8")
+    r2 = (ctx["out"] / "stage.r2.json").read_text(encoding="utf-8")
+    assert r1 == r2
+
+
+@then("JITAI の需要は介入しない場合の判定点で数えたと記録される")
+def _t_basis(ctx: dict[str, Any]) -> None:
+    for r in range(ctx["rounds"] + 1):
+        jitai = json.loads((ctx["out"] / f"jitai.r{r}.json").read_text(encoding="utf-8"))
+        assert jitai["demand"]["basis"] == "no_intervention"

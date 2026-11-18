@@ -141,6 +141,7 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         RETRY_AFTER_SKIP_MIN,
         demand_cells,
         demand_zone_counts,
+        latent_decisions,
         run_jitai,
         summarize,
     )
@@ -189,6 +190,8 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
     summary = summarize(result)
     home = {w.id: w.home_spot_id for w in workers}
     zone_of = demand_zones(stage, DEMAND_ZONE_M)
+    # 需要は介入しない場合の判定点で数える（配車の結果に左右されないように）
+    latent = latent_decisions(workers, corrected=not args.no_correction)
     out = {
         "generator": f"{_git_version()} jitai",
         "stage_ref": {"area_id": stage.area.id, "date": stage.date.isoformat()},
@@ -215,9 +218,10 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
         "summary": summary,
         "demand": {
             "note": (
-                "過緊張の判定点を、勤務地に近い地点の区画（一辺 zone_m）・時刻ごとに数え、"
-                "min_workers 人以上の区画・時刻だけを、区画内の地点に等分した集計値"
+                "介入しない場合の過緊張の判定点を、勤務地に近い地点の区画（一辺 zone_m）・"
+                "時刻ごとに数え、min_workers 人以上の区画・時刻だけを、区画内の地点に等分した集計値"
             ),
+            "basis": "no_intervention",
             "min_workers": DEMAND_MIN_WORKERS,
             "zone_m": DEMAND_ZONE_M,
             "zones": [
@@ -227,9 +231,9 @@ def cmd_jitai(args: argparse.Namespace, weather_dir: Path) -> int:
                     "count": z["count"],
                     "spots": len(z["spot_ids"]),
                 }
-                for z in demand_zone_counts(result.records, home, zone_of, DEMAND_MIN_WORKERS)
+                for z in demand_zone_counts(latent, home, zone_of, DEMAND_MIN_WORKERS)
             ],
-            "cells": demand_cells(result.records, home, zone_of, DEMAND_MIN_WORKERS),
+            "cells": demand_cells(latent, home, zone_of, DEMAND_MIN_WORKERS),
         },
     }
     if args.messages or args.llm:
