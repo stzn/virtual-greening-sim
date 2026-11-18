@@ -8,7 +8,7 @@
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import numpy.typing as npt
@@ -77,6 +77,24 @@ class Record:
             "pet_destination_c": self.pet_destination_c,
             "pet_route_c": self.pet_route_c,
         }
+
+
+class TimedDecision(Protocol):
+    """需要の集計に要る、判定の時刻とワーカーだけを持つもの（Record・DecisionPoint）。"""
+
+    @property
+    def time_min(self) -> int: ...
+
+    @property
+    def worker_id(self) -> str: ...
+
+
+@dataclass(frozen=True)
+class DecisionPoint:
+    """介入しない場合の判定点（需要の元）。"""
+
+    time_min: int
+    worker_id: str
 
 
 @dataclass(frozen=True)
@@ -208,6 +226,31 @@ def run_jitai(
     return JitaiResult(records, list(workers), corrected, recovery, carryover_min, windows, burden)
 
 
+def latent_decisions(workers: Sequence[Worker], *, corrected: bool = True) -> list[DecisionPoint]:
+    """介入しない場合の判定点。需要はこれで数える。
+
+    介入が無ければ判定は毎回見送りになり、次の判定は RETRY_AFTER_SKIP_MIN 後、回復も入らない。
+    そのため判定点はワーカー（ln(HF) の系列）だけで決まり、配車・PET・予定に左右されない。
+    実際の記録（介入あり）で需要を数えると、ポッドを置いた区画ほど判定が減って次の周で
+    ポッドが離れ、配車と需要の反復が往復する（docs/jitai.md）。
+    """
+    t_grid = time_grid_min()
+    points: list[DecisionPoint] = []
+    for w in workers:
+        prof = worker_profile(w, corrected=corrected)
+        z = (w.ln_hf - prof.predict(t_grid)) / prof.sd
+        next_eval = 0
+        for i, t_np in enumerate(t_grid):
+            t = int(t_np)
+            if t < next_eval or not _flagged(z, i):
+                continue
+            points.append(DecisionPoint(t, w.id))
+            next_eval = t + RETRY_AFTER_SKIP_MIN
+    # run_jitai の記録と同じ順（時刻、同じ時刻ならワーカーの順）
+    order = {w.id: k for k, w in enumerate(workers)}
+    return sorted(points, key=lambda p: (p.time_min, order[p.worker_id]))
+
+
 def _flagged(z: FloatArray, i: int) -> bool:
     """窓 i で過緊張か（直近 SUSTAIN_WINDOWS 窓の z がすべて閾値以下。detect と同じ規則）。"""
     if i < SUSTAIN_WINDOWS - 1:
@@ -225,7 +268,7 @@ def _burden(w: Worker, gained: FloatArray, t_grid: npt.NDArray[np.int64]) -> flo
 
 
 def demand_cells(
-    records: Sequence[Record],
+    records: Sequence[TimedDecision],
     home_spot: Mapping[str, str],
     zone_of: Mapping[str, tuple[int, int]],
     min_workers: int = DEMAND_MIN_WORKERS,
@@ -242,7 +285,7 @@ def demand_cells(
 
 
 def demand_zone_counts(
-    records: Sequence[Record],
+    records: Sequence[TimedDecision],
     home_spot: Mapping[str, str],
     zone_of: Mapping[str, tuple[int, int]],
     min_workers: int = DEMAND_MIN_WORKERS,
