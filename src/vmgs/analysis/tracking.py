@@ -2,7 +2,7 @@
 
 - 接触の終わりからの 1 分窓の Δln(HF)（基準は接触前の安静、`study.session_curve` と同じ）。
   帰りの 5 分と、出来事（会話・電話・飲食・離席）のある窓は除く。
-- 持ち越しがあるか: 接触の終わりから 20〜40 分の Δ の平均を `carry ~ walk + leave + (1|subject)`。
+- 持ち越しがあるか: 接触の終わりから 5〜25 分（帰りの 5 分の直後から）の Δ の平均を `carry ~ walk + leave + (1|subject)`。
   `leave` の係数が正なら、離脱（緑）の後に回復が残っている。stay の条件が日内変動の対照になる。
 - τc: leave の条件のセッションの平均曲線に K·e^{−t/τc} を当てはめ、セッション単位のブートストラップ
   （窓どうしの誤差が相関するため）で信頼区間を求める。決めた τc は `vmgs jitai --carryover-min` に入れる。
@@ -25,7 +25,10 @@ from vmgs.analysis.study import BASELINE_S, STEP_S
 
 RETURN_MIN = 5  # 接触の終わりからオフィスに戻るまで（帰りの歩行。解析から除く）
 TRACK_END_MIN = 60  # 接触の終わりから追跡の終わりまで
-ENDPOINT_MIN = (20, 40)  # 持ち越しの検出に使う区間（接触の終わりから）
+ENDPOINT_MIN = (
+    5,
+    25,
+)  # 持ち越しの検出に使う区間（接触の終わりから。見直しは docs/pilot-protocol.md 4.2）
 TRACK_WINDOW_S = 60.0
 TAU_C_BOUNDS_MIN = (1.0, 600.0)
 
@@ -42,7 +45,7 @@ class TrackingCurve:
 
 @dataclass(frozen=True)
 class CarryEffect:
-    coef: float  # leave の係数（20〜40 分の Δ の平均の差）
+    coef: float  # leave の係数（ENDPOINT_MIN の区間の Δ の平均の差）
     ci: tuple[float, float]  # 95% CI
     n_sessions: int
 
@@ -78,11 +81,13 @@ def tracking_curve(rec: Recording, baseline_s: float = BASELINE_S) -> TrackingCu
     return TrackingCurve(rec, t_min, delta, baseline)
 
 
-def carry_table(curves: Sequence[TrackingCurve]) -> pd.DataFrame:
-    """セッションごとの、接触の終わりから 20〜40 分の Δ の平均（列 carry）。"""
+def carry_table(
+    curves: Sequence[TrackingCurve], endpoint_min: tuple[float, float] = ENDPOINT_MIN
+) -> pd.DataFrame:
+    """セッションごとの、接触の終わりから endpoint_min（既定 5〜25 分）の Δ の平均（列 carry）。"""
     rows = []
     for c in curves:
-        in_ep = (c.t_min >= ENDPOINT_MIN[0]) & (c.t_min < ENDPOINT_MIN[1])
+        in_ep = (c.t_min >= endpoint_min[0]) & (c.t_min < endpoint_min[1])
         values = c.delta_lnhf[in_ep]
         carry = float(np.nanmean(values)) if np.isfinite(values).any() else float("nan")
         rec = c.recording
