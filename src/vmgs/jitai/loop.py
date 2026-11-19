@@ -33,8 +33,8 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
     lp.add_argument(
         "--objective",
         choices=["relief", "count"],
-        default="relief",
-        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+        default="count",
+        help="coverage の目的（既定 count: JITAI が届けられる需要の件数、relief: Σ 需要 × PET の改善）",
     )
     lp.add_argument("--rounds", type=int, default=1, help="需要を書き戻して配車し直す回数")
     lp.add_argument("--no-recovery", action="store_true", help="介入後の回復を反映しない")
@@ -114,6 +114,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 policy=args.policy,
                 pods=args.pods,
                 objective=args.objective,
+                rain_cover=args.rain_cover,
                 max_move_m=None,
                 compare=False,
             ),

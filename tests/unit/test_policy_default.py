@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from vmgs.fleet.cli import add_dispatch_parser
+from vmgs.fleet.cli import add_dispatch_parser, fleet_params
 from vmgs.jitai.cli import add_jitai_parser
 from vmgs.jitai.loop import add_loop_parser
 from vmgs.jitai.sweep import add_sweep_parser
@@ -81,6 +81,12 @@ def test_匿名にする人数と区画は指定しなければ3人と400m_指�
         ["sweep", "--stage", "s.json", "--out-dir", "o"],
     ],
 )
-def test_配車の目的は指定しなければPETの改善_countを選べる(argv: list[str]) -> None:
-    assert _parse(argv).objective == "relief"
-    assert _parse([*argv, "--objective", "count"]).objective == "count"
+def test_配車の目的は指定しなければ件数_reliefを選べる(argv: list[str]) -> None:
+    assert _parse(argv).objective == "count"
+    assert _parse([*argv, "--objective", "relief"]).objective == "relief"
+
+
+def test_配車の雨の上限は_雨よけの有無でJITAIと同じ値になる() -> None:
+    assert fleet_params(_parse(["dispatch", "--stage", "s.json"])).max_rain_mm_h == 5.0
+    args = _parse(["dispatch", "--stage", "s.json", "--no-rain-cover"])
+    assert fleet_params(args).max_rain_mm_h == 1.0

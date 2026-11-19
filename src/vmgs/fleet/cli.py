@@ -9,6 +9,10 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from vmgs.fleet.dispatch import FleetParams
 
 DEFAULT_OUT = Path("runs/dispatch.json")
 
@@ -30,8 +34,15 @@ def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser
     d.add_argument(
         "--objective",
         choices=["relief", "count"],
-        default="relief",
-        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+        default="count",
+        help="coverage の目的（既定 count: JITAI が届けられる需要の件数、relief: Σ 需要 × PET の改善）",
+    )
+    d.add_argument(
+        "--rain-cover",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="ポッドに雨よけあり（count の目的で 5 mm/h 以上の雨の時刻を数えない。既定。"
+        "--no-rain-cover で無し: 1 mm/h 以上）",
     )
     d.add_argument("--max-move-m", type=float, help="1 時間に動ける距離 [m]（既定: 1000）")
     d.add_argument(
@@ -39,6 +50,23 @@ def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser
         action="store_true",
         help="ポッドなし・greedy・fixed・none の比較表（人の快適度と植物の健康）も出す",
     )
+
+
+def fleet_params(args: argparse.Namespace) -> "FleetParams":
+    """CLI の引数から配車の設定を作る。雨の上限は JITAI の雨の見送りと同じ値にする。"""
+    from dataclasses import replace
+
+    from vmgs.fleet.dispatch import FleetParams
+    from vmgs.jitai.safety import rain_limit
+
+    fleet = FleetParams(
+        pods=args.pods,
+        objective=args.objective,
+        max_rain_mm_h=rain_limit(rain_cover=args.rain_cover),
+    )
+    if args.max_move_m is not None:
+        fleet = replace(fleet, max_move_m=args.max_move_m)
+    return fleet
 
 
 def _git_version() -> str:
@@ -57,12 +85,11 @@ def _git_version() -> str:
 
 def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     # PET の計算（pythermalcomfort / numba）は読み込みが重いので、このコマンドでだけ読み込む
-    from dataclasses import replace
 
     from vmgs.contracts import dispatch_errors_against_stage
     from vmgs.fleet.comfort import PetTable
     from vmgs.fleet.compare import comparison_markdown, no_pod_summary, summarize
-    from vmgs.fleet.dispatch import POLICIES, FleetParams, place_initial, run_fleet, to_dispatch
+    from vmgs.fleet.dispatch import POLICIES, place_initial, run_fleet, to_dispatch
     from vmgs.fleet.stage_world import StageWorld, load_stage
     from vmgs.weather.cache import load_records
 
@@ -74,9 +101,7 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     world = StageWorld.from_stage(stage)
     weather = {r.time.hour: r for r in load_records(weather_path)}
     pets = PetTable(world, weather)
-    fleet = FleetParams(pods=args.pods, objective=args.objective)
-    if args.max_move_m is not None:
-        fleet = replace(fleet, max_move_m=args.max_move_m)
+    fleet = fleet_params(args)
     hours = sorted(set(weather) & world.hours)
     try:
         if not hours:

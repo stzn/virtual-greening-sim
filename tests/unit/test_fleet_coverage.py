@@ -7,7 +7,8 @@ from vmgs.fleet.comfort import PetTable
 from vmgs.fleet.dispatch import Coverage, FleetParams, Policy, place_initial, run_fleet
 from vmgs.fleet.stage_world import StageWorld
 from vmgs.jitai.pods import WALK_RADIUS_M
-from vmgs.jitai.safety import DEST_PET_MAX_C, ROUTE_PET_MAX_C
+from vmgs.jitai.safety import DEST_PET_MAX_C, ROUTE_PET_MAX_C, rain_limit
+from vmgs.weather.models import WeatherRecord
 
 # 緯度 0.001° ≈ 111 m
 
@@ -34,6 +35,8 @@ def test_歩ける距離とPETの閾値はJITAIと同じ値() -> None:
     assert fp.walk_radius_m == WALK_RADIUS_M
     assert fp.max_dest_pet_c == DEST_PET_MAX_C
     assert fp.max_route_pet_c == ROUTE_PET_MAX_C
+    # 雨の上限は、ポッドに雨よけがある（JITAI の既定）ときの値
+    assert fp.max_rain_mm_h == rain_limit(rain_cover=True)
 
 
 def test_同じワーカーを二重に数えない() -> None:
@@ -161,11 +164,51 @@ def test_件数の目的の1件は_PETの改善の平均で換算する() -> Non
     assert count.value(["A"], 12) == pytest.approx(1.0 * count.count_unit)
 
 
-def test_配車の目的は指定しなければPETの改善_件数も選べる() -> None:
-    assert FleetParams().objective == "relief"
+def test_配車の目的は指定しなければ件数_PETの改善も選べる() -> None:
+    assert FleetParams().objective == "count"
     world, w, pets, _ = _setup(
         _spot("A", 35.680, 139.760, shade=0.0, demand=1.0),
         _spot("B", 35.690, 139.760, shade=0.0, demand=1.0),
     )
-    r = run_fleet(world, pets, w, policy="coverage", fleet=FleetParams(pods=1, objective="count"))
+    r = run_fleet(world, pets, w, policy="coverage", fleet=FleetParams(pods=1, objective="relief"))
     assert r.timelines["P1"]
+
+
+def _rain_at(w: dict[int, WeatherRecord], hour: int, mm: float) -> dict[int, WeatherRecord]:
+    return {**w, hour: w[hour].model_copy(update={"precipitation_mm": mm})}
+
+
+@pytest.mark.parametrize(("mm", "zero"), [(5.0, True), (4.9, False)])
+def test_件数の目的では_雨の上限以上の時刻の需要を数えない(mm: float, zero: bool) -> None:
+    # Given 日向の A に需要。12 時だけ雨が降る
+    world, w, _, _ = _setup(_spot("A", 35.680, 139.760, shade=0.0, demand=1.0))
+    pets = PetTable(world, _rain_at(w, 12, mm))
+    count = _count_cov(world, pets, max_rain_mm_h=5.0)
+    # Then 上限（5 mm/h）以上の雨の時刻は届けられないので 0、上限未満なら雨の無い時刻と同じ
+    assert count.value(["A"], 13) > 0.0
+    if zero:
+        assert count.value(["A"], 12) == 0.0
+    else:
+        assert count.value(["A"], 12) == pytest.approx(count.value(["A"], 13))
+
+
+def test_PETの改善の目的は_雨の上限を見ない() -> None:
+    # Given 12 時に強い雨（雨は PET の計算にも入るので、雨の無い時刻とは比べない）
+    world, w, _, _ = _setup(_spot("A", 35.680, 139.760, shade=0.0, demand=1.0))
+    pets = PetTable(world, _rain_at(w, 12, 20.0))
+    fp = FleetParams()
+
+    def cov(max_rain_mm_h: float | None) -> Coverage:
+        return Coverage(
+            world,
+            pets,
+            walk_radius_m=fp.walk_radius_m,
+            max_dest_pet_c=fp.max_dest_pet_c,
+            max_route_pet_c=fp.max_route_pet_c,
+            max_rain_mm_h=max_rain_mm_h,
+        )
+
+    # Then 雨の上限を渡しても、渡さないときと価値は同じ
+    without, with_limit = cov(None), cov(5.0)
+    assert with_limit.value(["A"], 12) == pytest.approx(without.value(["A"], 12))
+    assert with_limit.value(["A"], 12) > 0.0

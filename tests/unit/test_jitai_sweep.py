@@ -156,15 +156,18 @@ def test_配車の目的が違えば回し直し_記録が無い古い結果はP
 ) -> None:
     calls: list[argparse.Namespace] = []
     monkeypatch.setattr(loop, "cmd_loop", _fake_loop(calls))
+    # Given 既定（件数の目的）で回した結果から、目的の記録を消す（目的を足す前の古い結果）
     sweep.run_job(_job(tmp_path), tmp_path)
-    assert calls[-1].objective == "relief"
+    assert calls[-1].objective == "count"
     meta_path = tmp_path / "out" / "summary.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     del meta["objective"]
     meta_path.write_text(json.dumps(meta), encoding="utf-8")
-    sweep.run_job(_job(tmp_path), tmp_path)
+    # When PET の改善の目的で回す / Then 古い結果は PET の改善とみなし、回し直さない
+    sweep.run_job(_job(tmp_path, objective="relief"), tmp_path)
     assert len(calls) == 1
-    sweep.run_job(_job(tmp_path, objective="count"), tmp_path)
+    # When 既定（件数）で回す / Then 回し直す
+    sweep.run_job(_job(tmp_path), tmp_path)
     assert len(calls) == 2 and calls[-1].objective == "count"
 
 
