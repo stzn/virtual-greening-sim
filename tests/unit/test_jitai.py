@@ -1,12 +1,13 @@
 """JITAI の 4 段階（vmgs.jitai）の振る舞い。"""
 
 import itertools
+import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from vmgs.contracts import Dispatch, Pod, PodStep, StageRef
+from vmgs.contracts import Dispatch, Pod, PodStep, Stage, StageRef
 from vmgs.fleet.stage_world import StageWorld, load_stage
 from vmgs.jitai.calendar import MIN_FREE_MIN, Meeting, free_minutes
 from vmgs.jitai.demand import demand_zones
@@ -323,6 +324,59 @@ def test_ポッドに雨よけがあっても_5mm毎時以上の雨では見送�
     weather = [r for r in result.records if r.stage == "pet"]
     assert weather and all(r.reason == "rain" for r in weather)
     assert not any(r.outcome == "intervened" for r in result.records)
+
+
+# --- 屋根付きの網（地点データの版 2） ---
+
+SAMPLE_STAGE_V2 = Path("contracts/fixtures/stage.v2.sample.json")
+
+
+def _sheltered_world(home: str | None, pod: str | None) -> StageWorld:
+    """版 2 のサンプルで、OTM-002 を勤務地 OTM-001 の約 110 m 北に寄せ、2 地点の屋根の網を指定する。"""
+    data = json.loads(SAMPLE_STAGE_V2.read_text(encoding="utf-8"))
+    s1, s2 = data["spots"][0], data["spots"][1]
+    s2["lat"] = s1["lat"] + 0.001
+    s2["lon"] = s1["lon"]
+    for spot, net in ((s1, home), (s2, pod)):
+        spot["shelter"] = "open" if net is None else "covered"
+        spot["shelter_network"] = net
+    return StageWorld.from_stage(Stage.model_validate(data))
+
+
+def _sheltered_run(world: StageWorld, rain_mm: float):  # type: ignore[no-untyped-def]
+    # 勤務地 OTM-001 のワーカー、ポッドは終日 OTM-002（雨よけあり）、PET は低い
+    s1 = world.stage_spot("OTM-001")
+    w = _one_worker(s1.lat, s1.lon)
+    sched = _dispatch({"P1": [(h, "OTM-002") for h in range(24)]})
+    return run_jitai(
+        [w], world, sched, _const_pet(30.0, 30.0), rain_mm={h: rain_mm for h in range(24)}
+    )
+
+
+def test_勤務地とポッドが同じ屋根付きの網の上なら_強い雨でも介入する() -> None:
+    # Given 勤務地とポッドの地点が同じ網 N1、終日 20 mm/h の雨
+    result = _sheltered_run(_sheltered_world("N1", "N1"), 20.0)
+    # Then 濡れずに行き帰りできるので、雨では見送らない
+    assert result.records[0].outcome == "intervened"
+    assert not any(r.reason == "rain" for r in result.records)
+
+
+@pytest.mark.parametrize(("home", "pod"), [("N1", "N2"), (None, "N1"), ("N1", None), (None, None)])
+def test_網が違うか片方が屋根なしなら_今までどおり雨で見送る(
+    home: str | None, pod: str | None
+) -> None:
+    result = _sheltered_run(_sheltered_world(home, pod), 20.0)
+    weather = [r for r in result.records if r.stage == "pet"]
+    assert weather and all(r.reason == "rain" for r in weather)
+
+
+def test_同じ網かは_両方が屋根付きで網の番号が同じときだけ() -> None:
+    assert _sheltered_world("N1", "N1").same_shelter("OTM-001", "OTM-002")
+    assert not _sheltered_world("N1", "N2").same_shelter("OTM-001", "OTM-002")
+    assert not _sheltered_world(None, None).same_shelter("OTM-001", "OTM-002")
+    # 版 1 の地点データには屋根付きの地点が無い
+    v1 = StageWorld.from_stage(load_stage(SAMPLE_STAGE))
+    assert not v1.same_shelter("OTM-001", "OTM-001")
 
 
 def _rec(t_min: int, worker: str) -> Record:

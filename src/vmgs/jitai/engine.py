@@ -158,8 +158,11 @@ def _decide(
     for c, arrive, leave, back in seated:
         hours = range(t // 60, (back - 1) // 60 + 1)
         pet_reason, dest, route = pet_check(pet, c.spot_id, {w.home_spot_id, c.spot_id}, hours)
-        rainy = rain_mm is not None and rain_check(rain_mm, hours) >= rain_limit(
-            rain_cover=rain_cover
+        # 勤務地とポッドが同じ屋根付きの網の上なら、行き帰りも濡れないので雨では見送らない
+        rainy = (
+            rain_mm is not None
+            and not world.same_shelter(w.home_spot_id, c.spot_id)
+            and rain_check(rain_mm, hours) >= rain_limit(rain_cover=rain_cover)
         )
         reason: str | None = "rain" if rainy else pet_reason
         if reason is None:
@@ -198,6 +201,7 @@ def run_jitai(
 
     rain_mm（時刻 → 降水量 [mm/h]）を渡すと、行きから帰りまでに基準以上の雨がある判定を見送る。
     基準は RAIN_MAX_MM_H、rain_cover（ポッドに雨よけあり）なら RAIN_COVER_MAX_MM_H。
+    勤務地とポッドの地点が同じ屋根付きの網の上（world.same_shelter）なら、雨では見送らない。
     """
     t_grid = time_grid_min()
     params = TrueParams()

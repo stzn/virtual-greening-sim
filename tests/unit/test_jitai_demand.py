@@ -72,6 +72,19 @@ def test_書き戻した地点データは契約のスキーマで検証でき�
     assert Stage.model_validate_json(out.model_dump_json()) == out
 
 
+def test_書き戻しても版と屋根の情報は元の地点データのまま() -> None:
+    # Given 版 1 と版 2 のサンプル / When 需要を書き戻す
+    cells = [{"spot_id": "OTM-001", "hour": 12, "weight": 1}]
+    v1 = apply_demand(load_stage(SAMPLE_STAGE), _jitai_out(cells))
+    v2 = apply_demand(
+        load_stage(Path("contracts/fixtures/stage.v2.sample.json")), _jitai_out(cells)
+    )
+    # Then 版 1 には屋根のフィールドを書き足さず、版 2 は屋根付きの網を保つ
+    assert "shelter" not in v1.model_dump(exclude_unset=True)["spots"][0]
+    assert v2.schema_version == "2"
+    assert v2.spots[0].shelter == "covered" and v2.spots[0].shelter_network == "N1"
+
+
 @pytest.mark.parametrize(
     ("jitai", "needle"),
     [

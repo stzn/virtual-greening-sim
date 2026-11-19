@@ -168,17 +168,21 @@ class Coverage:
         r = self.relief(pod_spot, hour)
         if self.objective == "relief" or r <= 0.0:
             return r
-        if self._rainy(hour):
+        if self._rainy(pod_spot, demand_spot, hour):
             return 0.0
         return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
 
-    def _rainy(self, hour: int) -> bool:
-        """JITAI が雨で見送る時刻か（降水量が上限以上）。気象に無い時刻は雨なしとみなす。"""
+    def _rainy(self, pod_spot: str, demand_spot: str, hour: int) -> bool:
+        """JITAI が雨で見送るか（降水量が上限以上で、勤務地とポッドが同じ屋根付きの網の上にない）。
+
+        気象に無い時刻は雨なしとみなす。
+        """
         w = self.pets.weather.get(hour)
         return (
             self.max_rain_mm_h is not None
             and w is not None
             and w.precipitation_mm >= self.max_rain_mm_h
+            and not self.world.same_shelter(demand_spot, pod_spot)
         )
 
     def best(self, positions: Iterable[str], hours: Iterable[int]) -> dict[tuple[str, int], float]:

@@ -70,7 +70,44 @@ def test_地点IDの重複は拒否する() -> None:
 
 def test_未知の版は拒否する() -> None:
     data = _load("stage.sample.json")
-    data["schema_version"] = "2"
+    data["schema_version"] = "3"
+    with pytest.raises(ValidationError):
+        Stage.model_validate(data)
+
+
+# --- 版 2: 屋根付きの地点 ---
+
+
+def test_版2のサンプルは屋根の有無と屋根付きの網の番号を持つ() -> None:
+    stage = Stage.model_validate(_load("stage.v2.sample.json"))
+    assert stage.schema_version == "2"
+    covered = [s for s in stage.spots if s.shelter == "covered"]
+    assert [(s.id, s.shelter_network) for s in covered] == [("OTM-001", "N1")]
+    assert all(s.shelter_network is None for s in stage.spots if s.shelter == "open")
+
+
+def test_版1の地点は屋根なしとして読み_屋根付きの地点は持てない() -> None:
+    # Given 版 1 のサンプル / Then 屋根の無い地点として読める
+    stage = Stage.model_validate(_load("stage.sample.json"))
+    assert all(s.shelter == "open" and s.shelter_network is None for s in stage.spots)
+    # When 版 1 のまま屋根付きの地点を足す / Then 拒否する（版を上げ忘れた書き出しを防ぐ）
+    data = _load("stage.sample.json")
+    data["spots"][0]["shelter"] = "covered"
+    data["spots"][0]["shelter_network"] = "N1"
+    with pytest.raises(ValidationError):
+        Stage.model_validate(data)
+
+
+def test_屋根付きの地点に網の番号が無ければ拒否する() -> None:
+    data = _load("stage.v2.sample.json")
+    del data["spots"][0]["shelter_network"]
+    with pytest.raises(ValidationError):
+        Stage.model_validate(data)
+
+
+def test_屋根の無い地点に網の番号があれば拒否する() -> None:
+    data = _load("stage.v2.sample.json")
+    data["spots"][1]["shelter_network"] = "N1"
     with pytest.raises(ValidationError):
         Stage.model_validate(data)
 

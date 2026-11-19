@@ -3,6 +3,7 @@
 import pytest
 
 from tests.unit.test_fleet import _spot, _stage, _weather
+from vmgs.contracts import Stage
 from vmgs.fleet.comfort import PetTable
 from vmgs.fleet.dispatch import Coverage, FleetParams, Policy, place_initial, run_fleet
 from vmgs.fleet.stage_world import StageWorld
@@ -212,3 +213,33 @@ def test_PETの改善の目的は_雨の上限を見ない() -> None:
     without, with_limit = cov(None), cov(5.0)
     assert with_limit.value(["A"], 12) == pytest.approx(without.value(["A"], 12))
     assert with_limit.value(["A"], 12) > 0.0
+
+
+def _covered(spot: dict[str, object], net: str | None) -> dict[str, object]:
+    return {**spot, "shelter": "open" if net is None else "covered", "shelter_network": net}
+
+
+def _sheltered_count(home: str | None, pod: str | None, mm: float) -> float:
+    """需要は勤務地 D だけ、ポッドは 100 m 先の P。12 時に mm の雨。件数の目的の P の価値。"""
+    stage = _stage(
+        _spot("D", 35.680, 139.760, shade=1.0, demand=1.0),
+        _spot("P", 35.681, 139.760, shade=1.0, demand=0.0),
+    )
+    data = stage.model_dump(mode="json")
+    data["schema_version"] = "2"
+    data["spots"] = [_covered(data["spots"][0], home), _covered(data["spots"][1], pod)]
+    world = StageWorld.from_stage(Stage.model_validate(data))
+    w = _weather(temperature_c=29.0, shortwave_w_m2=500.0)
+    pets = PetTable(world, _rain_at(w, 12, mm))
+    return _count_cov(world, pets, max_rain_mm_h=5.0).value(["P"], 12)
+
+
+def test_件数の目的では_勤務地とポッドが同じ屋根付きの網なら_雨の時刻も数える() -> None:
+    # Given 勤務地 D とポッドの地点 P が同じ網、12 時に 20 mm/h の雨
+    # Then JITAI と同じく雨で見送らないので、届けられる需要として数える
+    assert _sheltered_count("N1", "N1", 20.0) > 0.0
+
+
+@pytest.mark.parametrize(("home", "pod"), [("N1", "N2"), (None, "N1"), ("N1", None)])
+def test_件数の目的では_網が違えば雨の時刻を数えない(home: str | None, pod: str | None) -> None:
+    assert _sheltered_count(home, pod, 20.0) == 0.0

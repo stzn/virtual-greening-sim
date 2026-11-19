@@ -80,6 +80,11 @@ class StageWorld:
     def stage_spot(self, spot_id: str) -> StageSpot:
         return self._spots[spot_id]
 
+    def same_shelter(self, a: str, b: str) -> bool:
+        """地点 a と b が同じ屋根付きの網の上にあり、濡れずに行き来できるか（版 1 の地点データでは常に偽）。"""
+        net = self._spots[a].shelter_network
+        return net is not None and net == self._spots[b].shelter_network
+
     def capacity(self, spot_id: str) -> int:
         return self._spots[spot_id].capacity_pods
 
