@@ -95,6 +95,12 @@ class StageSpot(_Strict):
         default=None,
         description="屋根付きの通路の網の番号（版 2 から）。同じ番号の地点どうしは濡れずに行き来できる",
     )
+    shelter_access: str | None = Field(
+        default=None,
+        description=(
+            "屋根なしの地点から近く（50 m 以内）の出入口で入れる、屋根付きの通路の網の番号（版 2 から）"
+        ),
+    )
 
     @model_validator(mode="after")
     def _hours_unique(self) -> "StageSpot":
@@ -108,12 +114,18 @@ class StageSpot(_Strict):
             raise ValueError(
                 f"地点 {self.id}: 屋根付き（covered）の地点だけが shelter_network を持つ"
             )
+        if self.shelter == "covered" and self.shelter_access is not None:
+            raise ValueError(
+                f"地点 {self.id}: 屋根付き（covered）の地点は網の上にいるので shelter_access を持てない"
+            )
         return self
 
 
 class Stage(_Strict):
     schema_version: Literal["1", "2"] = Field(
-        description="1: 屋根の情報なし。2: 地点に shelter・shelter_network を足した版"
+        description=(
+            "1: 屋根の情報なし。2: 地点に shelter・shelter_network・shelter_access を足した版"
+        )
     )
     area: Area
     date: dt.date = Field(description="日影を計算した日（太陽位置の基準）")
@@ -131,10 +143,10 @@ class Stage(_Strict):
     @model_validator(mode="after")
     def _v1_has_no_shelter(self) -> "Stage":
         if self.schema_version == "1":
-            bad = [s.id for s in self.spots if s.shelter != "open"]
+            bad = [s.id for s in self.spots if s.shelter != "open" or s.shelter_access]
             if bad:
                 raise ValueError(
-                    f"版 1 の地点データは屋根付きの地点を持てない（版 2 にする）: {bad}"
+                    f"版 1 の地点データは屋根付きの地点・網への入口を持てない（版 2 にする）: {bad}"
                 )
         return self
 
