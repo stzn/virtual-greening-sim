@@ -79,8 +79,12 @@ class FleetParams:
     # JITAI は道中の PET（勤務地とポッドの地点の日向の PET）が閾値以上なら見送る（safety.ROUTE_PET_MAX_C）
     max_route_pet_c: float = 42.0
     # coverage の目的: "relief" は Σ 需要 × PET の改善、"count" は Σ 需要 × [JITAI が届けられる]
-    # （勤務地とポッドの地点の PET が閾値の下。1 件は PET の改善の平均 [℃] に換算する）
-    objective: Objective = "relief"
+    # （勤務地とポッドの地点の PET が閾値の下で、雨が上限の下。1 件は PET の改善の平均 [℃] に換算する）
+    # 既定は count（rainy を含むどの条件でも relief より介入率が下がらなかった。docs/jitai.md）
+    objective: Objective = "count"
+    # count の目的で、この降水量 [mm/h] 以上の時刻は届けられないとみなす。JITAI の雨の見送り
+    # （vmgs.jitai.safety.rain_limit。ポッドに雨よけがあれば 5 mm/h、無ければ 1 mm/h）と同じ値にする
+    max_rain_mm_h: float = 5.0
 
 
 @dataclass
@@ -110,8 +114,10 @@ class Coverage:
         max_dest_pet_c: float,
         max_route_pet_c: float,
         objective: Objective = "relief",
+        max_rain_mm_h: float | None = None,
     ) -> None:
         self.world, self.pets = world, pets
+        self.max_rain_mm_h = max_rain_mm_h
         self.max_dest_pet_c, self.max_route_pet_c = max_dest_pet_c, max_route_pet_c
         self.objective = objective
         self._count_unit: float | None = None
@@ -162,7 +168,18 @@ class Coverage:
         r = self.relief(pod_spot, hour)
         if self.objective == "relief" or r <= 0.0:
             return r
+        if self._rainy(hour):
+            return 0.0
         return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
+
+    def _rainy(self, hour: int) -> bool:
+        """JITAI が雨で見送る時刻か（降水量が上限以上）。気象に無い時刻は雨なしとみなす。"""
+        w = self.pets.weather.get(hour)
+        return (
+            self.max_rain_mm_h is not None
+            and w is not None
+            and w.precipitation_mm >= self.max_rain_mm_h
+        )
 
     def best(self, positions: Iterable[str], hours: Iterable[int]) -> dict[tuple[str, int], float]:
         """(地点 j, 時刻) ごとに、覆うポッドの価値（PET の改善、または件数の重み）の最大。"""
@@ -392,6 +409,7 @@ def run_fleet(
             max_dest_pet_c=fleet.max_dest_pet_c,
             max_route_pet_c=fleet.max_route_pet_c,
             objective=fleet.objective,
+            max_rain_mm_h=fleet.max_rain_mm_h,
         )
         if policy == "coverage"
         else None

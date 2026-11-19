@@ -96,7 +96,7 @@ class Job:
     rain_cover: bool = True
     min_workers: int = 3
     zone_m: float = 400.0
-    objective: str = "relief"
+    objective: str = "count"
 
 
 def _matches(meta: Mapping[str, Any], job: Job) -> bool:
@@ -340,8 +340,8 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     sp.add_argument(
         "--objective",
         choices=["relief", "count"],
-        default="relief",
-        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+        default="count",
+        help="coverage の目的（既定 count: JITAI が届けられる需要の件数、relief: Σ 需要 × PET の改善）",
     )
     sp.add_argument("--out-dir", type=Path, required=True)
 
@@ -415,7 +415,7 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
     table = _markdown(summary)
     if not args.rain_cover:
         table = "ポッドに雨よけ無し（1 mm/h 以上の雨では勧めない）\n\n" + table
-    if args.objective != "relief":
+    if args.objective != "count":
         table = f"配車の目的: {args.objective}\n\n" + table
     (out / "summary.md").write_text(table + "\n", encoding="utf-8")
     print(table)
