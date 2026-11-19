@@ -18,6 +18,8 @@ coverage は greedy と同じ手順で、2. の価値だけを「徒歩圏で覆
 地点 j のワーカーは、歩ける距離にある安全な（樹冠下 PET が閾値未満の）ポッドのうち、PET が最も
 下がる 1 台へ行くとみなす: 価値 = Σ_j 需要(j) × max_{覆うポッド s} PET の改善(s)。
 JITAI ではワーカーが徒歩圏のポッドへ歩き、目的地の PET が高ければ見送るため（docs/dispatch.md）。
+件数の目的（count）では、雨の上限以上の時刻に、勤務地と同じ屋根付きの網の上のポッドも数える
+（濡れずに休めるので JITAI は見送らない。屋根の下では PET の改善が 0 でも数える）。
 """
 
 from collections.abc import Callable, Iterable
@@ -135,13 +137,36 @@ class Coverage:
         return self._near[spot_id]
 
     def relief(self, spot_id: str, hour: int) -> float:
-        """ポッドを置いたときの PET の改善。JITAI が見送る地点（樹冠下 PET が目的地の閾値以上、
-        または地点の日向の PET が道中の閾値以上）なら 0。"""
-        if self.pets.pet(spot_id, hour, covered=True) >= self.max_dest_pet_c:
-            return 0.0
-        if self.pets.pet(spot_id, hour, covered=False) >= self.max_route_pet_c:
-            return 0.0
-        return self.pets.relief(spot_id, hour)
+        """ポッドを置いたときの PET の改善。JITAI が見送る地点（_safe が偽）なら 0。"""
+        return self.pets.relief(spot_id, hour) if self._safe(spot_id, hour) else 0.0
+
+    def _safe(self, spot_id: str, hour: int) -> bool:
+        """JITAI が PET で見送らない地点か（樹冠下 PET が目的地の閾値未満、かつ日向の PET が道中の閾値未満）。"""
+        return (
+            self.pets.pet(spot_id, hour, covered=True) < self.max_dest_pet_c
+            and self.pets.pet(spot_id, hour, covered=False) < self.max_route_pet_c
+        )
+
+    def _rain_hour(self, hour: int) -> bool:
+        """降水量が雨の上限以上の時刻か（気象に無い時刻は雨なしとみなす）。"""
+        w = self.pets.weather.get(hour)
+        return (
+            self.max_rain_mm_h is not None
+            and w is not None
+            and w.precipitation_mm >= self.max_rain_mm_h
+        )
+
+    def _may_shelter(self, spot_id: str, hour: int) -> bool:
+        """件数の目的で、PET の改善が無くても価値を持ちうるか（雨の時刻の、屋根付きの網の上の地点）。"""
+        return (
+            self.objective == "count"
+            and self.world.stage_spot(spot_id).shelter_network is not None
+            and self._rain_hour(hour)
+        )
+
+    def _active(self, spot_id: str, hour: int) -> bool:
+        """spot_id のポッドが、時刻 hour に誰かを覆いうるか（best・add_gain で候補を絞る）。"""
+        return self.relief(spot_id, hour) > 0.0 or self._may_shelter(spot_id, hour)
 
     @property
     def count_unit(self) -> float:
@@ -166,23 +191,27 @@ class Coverage:
     def score(self, pod_spot: str, demand_spot: str, hour: int) -> float:
         """pod_spot のポッドが demand_spot のワーカーを覆う価値（徒歩圏の内であること）は呼び出し側で見る。"""
         r = self.relief(pod_spot, hour)
-        if self.objective == "relief" or r <= 0.0:
+        if self.objective == "relief":
+            return r
+        if self._sheltered(pod_spot, demand_spot, hour):
+            # 雨の時刻に、勤務地とポッドが同じ屋根付きの網の上: 濡れずに休めるので、PET の改善が 0 でも数える
+            return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
+        if r <= 0.0:
             return r
         if self._rainy(pod_spot, demand_spot, hour):
             return 0.0
         return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
 
     def _rainy(self, pod_spot: str, demand_spot: str, hour: int) -> bool:
-        """JITAI が雨で見送るか（降水量が上限以上で、勤務地とポッドが同じ屋根付きの網の上にない）。
+        """JITAI が雨で見送るか（降水量が上限以上で、勤務地とポッドが同じ屋根付きの網の上にない）。"""
+        return self._rain_hour(hour) and not self.world.same_shelter(demand_spot, pod_spot)
 
-        気象に無い時刻は雨なしとみなす。
-        """
-        w = self.pets.weather.get(hour)
+    def _sheltered(self, pod_spot: str, demand_spot: str, hour: int) -> bool:
+        """雨の時刻に、勤務地とポッドが同じ屋根付きの網の上で、ポッドの地点を JITAI が PET で見送らないか。"""
         return (
-            self.max_rain_mm_h is not None
-            and w is not None
-            and w.precipitation_mm >= self.max_rain_mm_h
-            and not self.world.same_shelter(demand_spot, pod_spot)
+            self._rain_hour(hour)
+            and self.world.same_shelter(demand_spot, pod_spot)
+            and self._safe(pod_spot, hour)
         )
 
     def best(self, positions: Iterable[str], hours: Iterable[int]) -> dict[tuple[str, int], float]:
@@ -191,7 +220,7 @@ class Coverage:
         hours = list(hours)
         for s in set(positions):
             for t in hours:
-                if self.relief(s, t) <= 0.0:
+                if not self._active(s, t):
                     continue
                 for j in self._near[s]:
                     r = self.score(s, j, t)
@@ -208,7 +237,7 @@ class Coverage:
         """best の配置に spot_id のポッドを足したとき、覆える需要（× 時刻の重み）がいくら増えるか。"""
         gain = 0.0
         for t, weight in weighted_hours:
-            if self.relief(spot_id, t) <= 0.0:
+            if not self._active(spot_id, t):
                 continue
             for j in self._near[spot_id]:
                 d = self.world.demand(j, t)

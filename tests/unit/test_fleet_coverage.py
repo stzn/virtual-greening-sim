@@ -243,3 +243,80 @@ def test_件数の目的では_勤務地とポッドが同じ屋根付きの網�
 @pytest.mark.parametrize(("home", "pod"), [("N1", "N2"), (None, "N1"), ("N1", None)])
 def test_件数の目的では_網が違えば雨の時刻を数えない(home: str | None, pod: str | None) -> None:
     assert _sheltered_count(home, pod, 20.0) == 0.0
+
+
+def _roofed_world(home: str | None, pod: str | None) -> StageWorld:
+    """勤務地 D（需要あり）と 100 m 先の P は、遮蔽 1.0・天空率 0（屋根付きの地点。ポッドを置いても PET は下がらない）。
+    200 m 先に日向の屋根なしの O。"""
+    d = _spot("D", 35.680, 139.760, shade=1.0, demand=1.0)
+    p = _spot("P", 35.681, 139.760, shade=1.0, demand=0.0)
+    o = _spot("O", 35.682, 139.760, shade=0.0, demand=0.0)
+    # O を先頭に置く（価値が並んだときに先頭が選ばれても、屋根の下を選んだことにならないように）
+    data = _stage(o, d, p).model_dump(mode="json")
+    data["schema_version"] = "2"
+    for s in data["spots"][1:]:
+        s["sky_view_factor"] = 0.0
+    data["spots"][1] = _covered(data["spots"][1], home)
+    data["spots"][2] = _covered(data["spots"][2], pod)
+    return StageWorld.from_stage(Stage.model_validate(data))
+
+
+def _roofed_pets(world: StageWorld, mm: float) -> PetTable:
+    w = _weather(temperature_c=29.0, shortwave_w_m2=500.0)
+    return PetTable(world, _rain_at(w, 12, mm))
+
+
+def test_屋根付きの地点ではポッドを置いてもPETが下がらない() -> None:
+    pets = _roofed_pets(_roofed_world("N1", "N1"), 20.0)
+    assert pets.relief("P", 12) == 0.0
+
+
+def test_件数の目的では_PETの改善が無い屋根の下でも_同じ網の雨の時刻を数える() -> None:
+    # Given 勤務地 D と屋根の下の P が同じ網、12 時に 20 mm/h の雨
+    world = _roofed_world("N1", "N1")
+    count = _count_cov(world, _roofed_pets(world, 20.0), max_rain_mm_h=5.0)
+    # Then JITAI は雨でも PET でも見送らないので、濡れずに休める需要として数える
+    assert count.value(["P"], 12) > 0.0
+
+
+@pytest.mark.parametrize(("home", "pod"), [("N1", "N2"), (None, "N1")])
+def test_件数の目的では_網が違えば屋根の下のポッドで雨の時刻を数えない(
+    home: str | None, pod: str | None
+) -> None:
+    world = _roofed_world(home, pod)
+    count = _count_cov(world, _roofed_pets(world, 20.0), max_rain_mm_h=5.0)
+    assert count.value(["P"], 12) == 0.0
+
+
+def test_件数の目的でも_雨の上限未満の時刻は_PETが下がらない地点を数えない() -> None:
+    # Given 同じ網だが、12 時の雨は上限未満
+    world = _roofed_world("N1", "N1")
+    count = _count_cov(world, _roofed_pets(world, 4.9), max_rain_mm_h=5.0)
+    # Then 雨で見送られる需要ではないので、今までどおり PET の改善の無い地点は数えない
+    assert count.value(["P"], 12) == 0.0
+
+
+def test_PETの改善の目的では_屋根の下のポッドに価値を付けない() -> None:
+    world = _roofed_world("N1", "N1")
+    pets = _roofed_pets(world, 20.0)
+    fp = FleetParams()
+    relief = Coverage(
+        world,
+        pets,
+        walk_radius_m=fp.walk_radius_m,
+        max_dest_pet_c=fp.max_dest_pet_c,
+        max_route_pet_c=fp.max_route_pet_c,
+        max_rain_mm_h=5.0,
+    )
+    assert relief.value(["P"], 12) == 0.0
+
+
+def test_件数の目的の初期配置は_雨の時刻に網の上の需要を覆う屋根の下を選ぶ() -> None:
+    # Given 12 時だけの 1 時間、強い雨。需要は屋根付きの勤務地 D だけ
+    world = _roofed_world("N1", "N1")
+    pets = _roofed_pets(world, 20.0)
+    count = _count_cov(world, pets, max_rain_mm_h=5.0)
+    # When 12 時だけで初期配置を決める
+    placed = place_initial(world, pets, [12], 1, coverage=count)
+    # Then 日向の O（雨で見送られる）ではなく、屋根の下に置く
+    assert placed[0] in {"D", "P"}
