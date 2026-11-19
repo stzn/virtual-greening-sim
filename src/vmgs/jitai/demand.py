@@ -65,7 +65,8 @@ def apply_demand(stage: Stage, jitai_out: Mapping[str, Any]) -> Stage:
     by_spot: dict[str, list[DemandHour]] = {}
     for c in sorted(cells, key=lambda c: (c["spot_id"], c["hour"])):
         by_spot.setdefault(c["spot_id"], []).append(DemandHour(hour=c["hour"], weight=c["weight"]))
-    data = stage.model_dump(mode="json")
+    # 元の地点データに無かった既定値（版 2 の屋根のフィールドなど）は書き足さない
+    data = stage.model_dump(mode="json", exclude_unset=True)
     for spot in data["spots"]:
         spot["demand"] = [d.model_dump() for d in by_spot.get(spot["id"], [])]
     try:

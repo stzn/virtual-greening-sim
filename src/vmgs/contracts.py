@@ -73,6 +73,9 @@ class DemandHour(_Strict):
 SpotKind = Literal["sidewalk", "plaza", "park_edge", "rooftop"]
 
 
+Shelter = Literal["open", "covered"]
+
+
 class StageSpot(_Strict):
     id: str = Field(min_length=1)
     name: str
@@ -84,6 +87,14 @@ class StageSpot(_Strict):
     green: GreenContext
     hourly: list[SpotHour] = Field(min_length=1)
     demand: list[DemandHour] = Field(default_factory=list)
+    shelter: Shelter = Field(
+        default="open",
+        description="屋根の有無（版 2 から）。covered は地下通路・屋内の通路・アーケードの上の地点",
+    )
+    shelter_network: str | None = Field(
+        default=None,
+        description="屋根付きの通路の網の番号（版 2 から）。同じ番号の地点どうしは濡れずに行き来できる",
+    )
 
     @model_validator(mode="after")
     def _hours_unique(self) -> "StageSpot":
@@ -91,9 +102,19 @@ class StageSpot(_Strict):
         _unique([d.hour for d in self.demand], f"地点 {self.id} の demand の時刻")
         return self
 
+    @model_validator(mode="after")
+    def _network_iff_covered(self) -> "StageSpot":
+        if (self.shelter == "covered") != (self.shelter_network is not None):
+            raise ValueError(
+                f"地点 {self.id}: 屋根付き（covered）の地点だけが shelter_network を持つ"
+            )
+        return self
+
 
 class Stage(_Strict):
-    schema_version: Literal["1"]
+    schema_version: Literal["1", "2"] = Field(
+        description="1: 屋根の情報なし。2: 地点に shelter・shelter_network を足した版"
+    )
     area: Area
     date: dt.date = Field(description="日影を計算した日（太陽位置の基準）")
     timezone: Literal["Asia/Tokyo"]
@@ -105,6 +126,16 @@ class Stage(_Strict):
     @model_validator(mode="after")
     def _ids_unique(self) -> "Stage":
         _unique([s.id for s in self.spots], "地点 ID")
+        return self
+
+    @model_validator(mode="after")
+    def _v1_has_no_shelter(self) -> "Stage":
+        if self.schema_version == "1":
+            bad = [s.id for s in self.spots if s.shelter != "open"]
+            if bad:
+                raise ValueError(
+                    f"版 1 の地点データは屋根付きの地点を持てない（版 2 にする）: {bad}"
+                )
         return self
 
 

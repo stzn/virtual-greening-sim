@@ -103,7 +103,7 @@ def cmd_demand(args: argparse.Namespace) -> int:
         print(f"需要を書き戻せません: {e}", file=sys.stderr)
         return 1
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(out.model_dump_json(indent=1) + "\n", encoding="utf-8")
+    args.out.write_text(out.model_dump_json(indent=1, exclude_unset=True) + "\n", encoding="utf-8")
     cells = sum(len(s.demand) for s in out.spots)
     spots = sum(1 for s in out.spots if s.demand)
     print(f"書き出した: {args.out}（需要 {cells} セル・{spots}/{len(out.spots)} 地点）")
