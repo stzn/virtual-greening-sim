@@ -96,6 +96,7 @@ class Job:
     rain_cover: bool = True
     min_workers: int = 3
     zone_m: float = 400.0
+    objective: str = "relief"
 
 
 def _matches(meta: Mapping[str, Any], job: Job) -> bool:
@@ -109,6 +110,7 @@ def _matches(meta: Mapping[str, Any], job: Job) -> bool:
         and meta.get("rain_cover", False) == job.rain_cover
         and meta.get("min_workers", 3) == job.min_workers
         and meta.get("zone_m", 400.0) == job.zone_m
+        and meta.get("objective", "relief") == job.objective
         and len(meta.get("rounds", [])) == job.rounds + 1
     )
 
@@ -136,6 +138,7 @@ def run_job(job: Job, weather_dir: Path) -> list[dict[str, Any]]:
             rain_cover=job.rain_cover,
             min_workers=job.min_workers,
             zone_m=job.zone_m,
+            objective=job.objective,
             out_dir=job.out_dir,
         ),
         weather_dir,
@@ -334,6 +337,12 @@ def add_sweep_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     sp.add_argument(
         "--zone-m", type=float, default=400.0, help="需要を集計する区画の一辺 [m]（既定 400）"
     )
+    sp.add_argument(
+        "--objective",
+        choices=["relief", "count"],
+        default="relief",
+        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+    )
     sp.add_argument("--out-dir", type=Path, required=True)
 
 
@@ -358,6 +367,7 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
             rain_cover=args.rain_cover,
             min_workers=args.min_workers,
             zone_m=args.zone_m,
+            objective=args.objective,
         )
         for sc in args.scenarios
         for pol in policies
@@ -396,6 +406,7 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
         "rain_cover": args.rain_cover,
         "min_workers": args.min_workers,
         "zone_m": args.zone_m,
+        "objective": args.objective,
         **summary,
     }
     (out / "summary.json").write_text(
@@ -404,6 +415,8 @@ def cmd_sweep(args: argparse.Namespace, weather_dir: Path) -> int:
     table = _markdown(summary)
     if not args.rain_cover:
         table = "ポッドに雨よけ無し（1 mm/h 以上の雨では勧めない）\n\n" + table
+    if args.objective != "relief":
+        table = f"配車の目的: {args.objective}\n\n" + table
     (out / "summary.md").write_text(table + "\n", encoding="utf-8")
     print(table)
     return 0

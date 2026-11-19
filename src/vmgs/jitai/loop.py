@@ -30,6 +30,12 @@ def add_loop_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser]") 
         choices=["greedy", "coverage"],
         help="配車の方式（coverage: 徒歩圏で覆える需要を見る）",
     )
+    lp.add_argument(
+        "--objective",
+        choices=["relief", "count"],
+        default="relief",
+        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+    )
     lp.add_argument("--rounds", type=int, default=1, help="需要を書き戻して配車し直す回数")
     lp.add_argument("--no-recovery", action="store_true", help="介入後の回復を反映しない")
     lp.add_argument(
@@ -107,6 +113,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
                 out=dispatch_path,
                 policy=args.policy,
                 pods=args.pods,
+                objective=args.objective,
                 max_move_m=None,
                 compare=False,
             ),
@@ -176,6 +183,7 @@ def cmd_loop(args: argparse.Namespace, weather_dir: Path) -> int:
         "rain_cover": args.rain_cover,
         "min_workers": args.min_workers,
         "zone_m": args.zone_m,
+        "objective": args.objective,
         "rounds": rows,
     }
     (out / "summary.json").write_text(

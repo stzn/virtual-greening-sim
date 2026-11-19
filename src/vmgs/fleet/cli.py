@@ -27,6 +27,12 @@ def add_dispatch_parser(sub: "argparse._SubParsersAction[argparse.ArgumentParser
         help="配車の方式（既定 coverage: 徒歩圏で覆える需要を見る）",
     )
     d.add_argument("--pods", type=int, default=3, help="ポッドの台数")
+    d.add_argument(
+        "--objective",
+        choices=["relief", "count"],
+        default="relief",
+        help="coverage の目的（relief: Σ 需要 × PET の改善、count: JITAI が届けられる需要の件数）",
+    )
     d.add_argument("--max-move-m", type=float, help="1 時間に動ける距離 [m]（既定: 1000）")
     d.add_argument(
         "--compare",
@@ -68,7 +74,7 @@ def cmd_dispatch(args: argparse.Namespace, weather_dir: Path) -> int:
     world = StageWorld.from_stage(stage)
     weather = {r.time.hour: r for r in load_records(weather_path)}
     pets = PetTable(world, weather)
-    fleet = FleetParams(pods=args.pods)
+    fleet = FleetParams(pods=args.pods, objective=args.objective)
     if args.max_move_m is not None:
         fleet = replace(fleet, max_move_m=args.max_move_m)
     hours = sorted(set(weather) & world.hours)
