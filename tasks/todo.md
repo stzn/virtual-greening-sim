@@ -153,7 +153,7 @@
   - [x] 配車の手順の結果の揺れの原因を調べる（配車の目的と介入率の向きが 120 組中 60 組で逆。局所解ではなく目的のずれ。多点の探索は入れない。docs/jitai.md）
   - [x] 配車の目的を、介入の見込みの件数に近づける（`--objective count`。向きのそろい 54 → 88/114。heatwave・normal で +1〜3.6pt、rainy・5 台で −0.5pt のため既定は relief のまま。docs/jitai.md）
   - [x] count の物差しに雨（雨よけの 5 mm/h）を入れ、既定を count にする（rainy・5 台 −0.5 → +0.5pt、8 台・周 0 は −0.5pt で CI がかろうじて 0 にかかる。docs/jitai.md）
-  - [ ] 地図アプリのデモを、既定の count の配車で作り直す（tokyo-green-simulator）
+  - [x] 地図アプリのデモを、既定の count の配車で作り直す（tokyo-green-simulator #23。heatwave・5 台の介入 167 → 180 件）
   - [x] 雨の日（rainy）でも coverage が良いか確かめる（3/5/8 台で greedy より +6.3/+20.1/+33.7pt。PET の見送りは 0 件）
   - [x] JITAI に雨の見送りを足す（1 mm/h 以上。雨の日の介入は 8・18 時だけになり、介入率 1〜2.5%）
   - [x] 反復が往復する問題を直す（需要を介入しない場合の判定点で数える。`latent_decisions`。1 周で需要が決まる）
