@@ -32,6 +32,8 @@ from vmgs.world.params import Params
 from vmgs.world.plant import PlantUnit, UnitStatus, clamp, evapotranspiration, health_delta
 
 Policy = Literal["greedy", "coverage", "fixed", "none"]
+Objective = Literal["relief", "count"]
+OBJECTIVES: tuple[Objective, ...] = ("relief", "count")
 POLICIES: tuple[Policy, ...] = ("greedy", "coverage", "fixed", "none")
 MOVING: tuple[Policy, ...] = ("greedy", "coverage")  # 移動の改善と退避をする方式
 
@@ -76,6 +78,9 @@ class FleetParams:
     max_dest_pet_c: float = 38.0
     # JITAI は道中の PET（勤務地とポッドの地点の日向の PET）が閾値以上なら見送る（safety.ROUTE_PET_MAX_C）
     max_route_pet_c: float = 42.0
+    # coverage の目的: "relief" は Σ 需要 × PET の改善、"count" は Σ 需要 × [JITAI が届けられる]
+    # （勤務地とポッドの地点の PET が閾値の下。1 件は PET の改善の平均 [℃] に換算する）
+    objective: Objective = "relief"
 
 
 @dataclass
@@ -104,9 +109,12 @@ class Coverage:
         walk_radius_m: float,
         max_dest_pet_c: float,
         max_route_pet_c: float,
+        objective: Objective = "relief",
     ) -> None:
         self.world, self.pets = world, pets
         self.max_dest_pet_c, self.max_route_pet_c = max_dest_pet_c, max_route_pet_c
+        self.objective = objective
+        self._count_unit: float | None = None
         ids = world.spot_ids
         self._near: dict[str, list[str]] = {s: [] for s in ids}
         for i, a in enumerate(ids):
@@ -129,16 +137,43 @@ class Coverage:
             return 0.0
         return self.pets.relief(spot_id, hour)
 
+    @property
+    def count_unit(self) -> float:
+        """件数の目的の 1 件の重み: PET の改善が正の（地点, 時刻）の、改善の平均 [℃]。
+
+        移動の閾値・減点（FleetParams）は「需要 × ℃」の単位なので、件数を同じ大きさにそろえる。
+        """
+        if self._count_unit is None:
+            values = [
+                r
+                for sid in self.world.spot_ids
+                for h in sorted(self.world.hours & set(self.pets.weather))
+                if (r := self.relief(sid, h)) > 0.0
+            ]
+            self._count_unit = sum(values) / len(values) if values else 1.0
+        return self._count_unit
+
+    def _home_ok(self, spot_id: str, hour: int) -> bool:
+        """勤務地 spot_id から歩き出せるか（日向の PET が道中の閾値の下。JITAI の道中の判定）。"""
+        return self.pets.pet(spot_id, hour, covered=False) < self.max_route_pet_c
+
+    def score(self, pod_spot: str, demand_spot: str, hour: int) -> float:
+        """pod_spot のポッドが demand_spot のワーカーを覆う価値（徒歩圏の内であること）は呼び出し側で見る。"""
+        r = self.relief(pod_spot, hour)
+        if self.objective == "relief" or r <= 0.0:
+            return r
+        return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
+
     def best(self, positions: Iterable[str], hours: Iterable[int]) -> dict[tuple[str, int], float]:
-        """(地点 j, 時刻) ごとに、覆うポッドの PET の改善の最大。"""
+        """(地点 j, 時刻) ごとに、覆うポッドの価値（PET の改善、または件数の重み）の最大。"""
         best: dict[tuple[str, int], float] = {}
         hours = list(hours)
         for s in set(positions):
             for t in hours:
-                r = self.relief(s, t)
-                if r <= 0.0:
+                if self.relief(s, t) <= 0.0:
                     continue
                 for j in self._near[s]:
+                    r = self.score(s, j, t)
                     if r > best.get((j, t), 0.0):
                         best[(j, t)] = r
         return best
@@ -152,12 +187,12 @@ class Coverage:
         """best の配置に spot_id のポッドを足したとき、覆える需要（× 時刻の重み）がいくら増えるか。"""
         gain = 0.0
         for t, weight in weighted_hours:
-            r = self.relief(spot_id, t)
-            if r <= 0.0:
+            if self.relief(spot_id, t) <= 0.0:
                 continue
             for j in self._near[spot_id]:
                 d = self.world.demand(j, t)
                 if d > 0.0:
+                    r = self.score(spot_id, j, t)
                     gain += weight * d * max(0.0, r - best.get((j, t), 0.0))
         return gain
 
@@ -356,6 +391,7 @@ def run_fleet(
             walk_radius_m=fleet.walk_radius_m,
             max_dest_pet_c=fleet.max_dest_pet_c,
             max_route_pet_c=fleet.max_route_pet_c,
+            objective=fleet.objective,
         )
         if policy == "coverage"
         else None

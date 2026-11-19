@@ -67,6 +67,7 @@ def _fake_loop(calls: list[argparse.Namespace]):  # type: ignore[no-untyped-def]
             "rain_cover": args.rain_cover,
             "min_workers": args.min_workers,
             "zone_m": args.zone_m,
+            "objective": args.objective,
             "rounds": rows,
         }
         (args.out_dir / "summary.json").write_text(json.dumps(meta), encoding="utf-8")
@@ -148,6 +149,23 @@ def test_匿名にする人数か区画が違えば回し直し_loopに渡す_�
     assert len(calls) == 2 and calls[-1].min_workers == 2
     sweep.run_job(_job(tmp_path, min_workers=2, zone_m=800.0), tmp_path)
     assert len(calls) == 3 and calls[-1].zone_m == 800.0
+
+
+def test_配車の目的が違えば回し直し_記録が無い古い結果はPETの改善とみなす(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[argparse.Namespace] = []
+    monkeypatch.setattr(loop, "cmd_loop", _fake_loop(calls))
+    sweep.run_job(_job(tmp_path), tmp_path)
+    assert calls[-1].objective == "relief"
+    meta_path = tmp_path / "out" / "summary.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    del meta["objective"]
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    sweep.run_job(_job(tmp_path), tmp_path)
+    assert len(calls) == 1
+    sweep.run_job(_job(tmp_path, objective="count"), tmp_path)
+    assert len(calls) == 2 and calls[-1].objective == "count"
 
 
 def test_集計は周の差と_方式と台数の差を_seedで対にして出す() -> None:

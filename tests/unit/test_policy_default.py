@@ -71,3 +71,16 @@ def test_匿名にする人数と区画は指定しなければ3人と400m_指�
     assert (args.min_workers, args.zone_m) == (3, 400.0)
     args = _parse([*argv, "--min-workers", "2", "--zone-m", "800"])
     assert (args.min_workers, args.zone_m) == (2, 800.0)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["dispatch", "--stage", "s.json"],
+        ["loop", "--stage", "s.json", "--out-dir", "o"],
+        ["sweep", "--stage", "s.json", "--out-dir", "o"],
+    ],
+)
+def test_配車の目的は指定しなければPETの改善_countを選べる(argv: list[str]) -> None:
+    assert _parse(argv).objective == "relief"
+    assert _parse([*argv, "--objective", "count"]).objective == "count"
