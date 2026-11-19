@@ -320,3 +320,16 @@ def test_件数の目的の初期配置は_雨の時刻に網の上の需要を�
     placed = place_initial(world, pets, [12], 1, coverage=count)
     # Then 日向の O（雨で見送られる）ではなく、屋根の下に置く
     assert placed[0] in {"D", "P"}
+
+
+def test_件数の目的では_屋根なしの勤務地も_出入口から入れる網の屋根の下のポッドなら雨の時刻を数える() -> (
+    None
+):
+    # Given 勤務地 D は屋根なしだが網 N1 への入口がある。P は N1 の屋根の下。12 時に 20 mm/h
+    base = _roofed_world(None, "N1")
+    data = base.stage.model_dump(mode="json")
+    data["spots"][1]["shelter_access"] = "N1"
+    world = StageWorld.from_stage(Stage.model_validate(data))
+    count = _count_cov(world, _roofed_pets(world, 20.0), max_rain_mm_h=5.0)
+    # Then 濡れずに休める需要として数える（入口が無ければ数えないことは、上の網が違う場合のテストで見る）
+    assert count.value(["P"], 12) > 0.0

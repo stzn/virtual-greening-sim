@@ -112,6 +112,27 @@ def test_屋根の無い地点に網の番号があれば拒否する() -> None:
         Stage.model_validate(data)
 
 
+def test_版2のサンプルには_出入口から屋根付きの網へ入れる屋根なしの地点がある() -> None:
+    stage = Stage.model_validate(_load("stage.v2.sample.json"))
+    access = [(s.id, s.shelter, s.shelter_access) for s in stage.spots if s.shelter_access]
+    assert access == [("OTM-002", "open", "N1")]
+
+
+def test_屋根付きの地点は網への入口を持てない() -> None:
+    # 屋根付きの地点は網そのものの上にいるので、入口は屋根なしの地点だけが持つ
+    data = _load("stage.v2.sample.json")
+    data["spots"][0]["shelter_access"] = "N1"
+    with pytest.raises(ValidationError):
+        Stage.model_validate(data)
+
+
+def test_版1の地点は網への入口を持てない() -> None:
+    data = _load("stage.sample.json")
+    data["spots"][1]["shelter_access"] = "N1"
+    with pytest.raises(ValidationError):
+        Stage.model_validate(data)
+
+
 def test_地点データにない地点や別の区域を指す配車は誤りとして挙げる() -> None:
     stage = Stage.model_validate(_load("stage.sample.json"))
     data = _load("dispatch.sample.json")

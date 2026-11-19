@@ -18,7 +18,7 @@ coverage は greedy と同じ手順で、2. の価値だけを「徒歩圏で覆
 地点 j のワーカーは、歩ける距離にある安全な（樹冠下 PET が閾値未満の）ポッドのうち、PET が最も
 下がる 1 台へ行くとみなす: 価値 = Σ_j 需要(j) × max_{覆うポッド s} PET の改善(s)。
 JITAI ではワーカーが徒歩圏のポッドへ歩き、目的地の PET が高ければ見送るため（docs/dispatch.md）。
-件数の目的（count）では、雨の上限以上の時刻に、勤務地と同じ屋根付きの網の上のポッドも数える
+件数の目的（count）では、雨の上限以上の時刻に、勤務地から屋根付きの網を通って行けるポッドも数える
 （濡れずに休めるので JITAI は見送らない。屋根の下では PET の改善が 0 でも数える）。
 """
 
@@ -194,7 +194,7 @@ class Coverage:
         if self.objective == "relief":
             return r
         if self._sheltered(pod_spot, demand_spot, hour):
-            # 雨の時刻に、勤務地とポッドが同じ屋根付きの網の上: 濡れずに休めるので、PET の改善が 0 でも数える
+            # 雨の時刻に、勤務地から屋根付きの網を通って行ける: 濡れずに休めるので、PET の改善が 0 でも数える
             return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
         if r <= 0.0:
             return r
@@ -203,14 +203,14 @@ class Coverage:
         return self.count_unit if self._home_ok(demand_spot, hour) else 0.0
 
     def _rainy(self, pod_spot: str, demand_spot: str, hour: int) -> bool:
-        """JITAI が雨で見送るか（降水量が上限以上で、勤務地とポッドが同じ屋根付きの網の上にない）。"""
-        return self._rain_hour(hour) and not self.world.same_shelter(demand_spot, pod_spot)
+        """JITAI が雨で見送るか（降水量が上限以上で、勤務地からポッドへ屋根付きの網を通って行けない）。"""
+        return self._rain_hour(hour) and not self.world.sheltered_route(demand_spot, pod_spot)
 
     def _sheltered(self, pod_spot: str, demand_spot: str, hour: int) -> bool:
-        """雨の時刻に、勤務地とポッドが同じ屋根付きの網の上で、ポッドの地点を JITAI が PET で見送らないか。"""
+        """雨の時刻に、勤務地からポッドへ屋根付きの網を通って行け、ポッドの地点を JITAI が PET で見送らないか。"""
         return (
             self._rain_hour(hour)
-            and self.world.same_shelter(demand_spot, pod_spot)
+            and self.world.sheltered_route(demand_spot, pod_spot)
             and self._safe(pod_spot, hour)
         )
 

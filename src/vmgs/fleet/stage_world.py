@@ -80,10 +80,16 @@ class StageWorld:
     def stage_spot(self, spot_id: str) -> StageSpot:
         return self._spots[spot_id]
 
-    def same_shelter(self, a: str, b: str) -> bool:
-        """地点 a と b が同じ屋根付きの網の上にあり、濡れずに行き来できるか（版 1 の地点データでは常に偽）。"""
-        net = self._spots[a].shelter_network
-        return net is not None and net == self._spots[b].shelter_network
+    def sheltered_route(self, home: str, pod: str) -> bool:
+        """勤務地 home からポッドの地点 pod へ、濡れずに（屋根付きの網を通って）行き来できるか。
+
+        ポッドは屋根付きの地点にあり、その網が勤務地の網（屋根付きの勤務地）か、
+        勤務地の近くの出入口から入れる網（屋根なしの勤務地の shelter_access）と同じとき真。
+        版 1 の地点データでは常に偽。
+        """
+        net = self._spots[pod].shelter_network
+        h = self._spots[home]
+        return net is not None and net == (h.shelter_network or h.shelter_access)
 
     def capacity(self, spot_id: str) -> int:
         return self._spots[spot_id].capacity_pods

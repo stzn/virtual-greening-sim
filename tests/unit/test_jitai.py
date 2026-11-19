@@ -340,6 +340,7 @@ def _sheltered_world(home: str | None, pod: str | None) -> StageWorld:
     for spot, net in ((s1, home), (s2, pod)):
         spot["shelter"] = "open" if net is None else "covered"
         spot["shelter_network"] = net
+        spot["shelter_access"] = None  # サンプルの入口は使わない（入口は _access_world で指定する）
     return StageWorld.from_stage(Stage.model_validate(data))
 
 
@@ -370,13 +371,44 @@ def test_網が違うか片方が屋根なしなら_今までどおり雨で見�
     assert weather and all(r.reason == "rain" for r in weather)
 
 
-def test_同じ網かは_両方が屋根付きで網の番号が同じときだけ() -> None:
-    assert _sheltered_world("N1", "N1").same_shelter("OTM-001", "OTM-002")
-    assert not _sheltered_world("N1", "N2").same_shelter("OTM-001", "OTM-002")
-    assert not _sheltered_world(None, None).same_shelter("OTM-001", "OTM-002")
+def test_濡れずに行けるかは_ポッドが屋根付きで_勤務地の網か入口の網と同じときだけ() -> None:
+    # 勤務地も屋根付き
+    assert _sheltered_world("N1", "N1").sheltered_route("OTM-001", "OTM-002")
+    assert not _sheltered_world("N1", "N2").sheltered_route("OTM-001", "OTM-002")
+    assert not _sheltered_world(None, None).sheltered_route("OTM-001", "OTM-002")
+    # 勤務地は屋根なしで、出入口から網へ入れる
+    assert _access_world("N1", "N1").sheltered_route("OTM-001", "OTM-002")
+    assert not _access_world("N2", "N1").sheltered_route("OTM-001", "OTM-002")
+    # ポッドは屋根の下にいる必要がある（入口のある屋根なしの地点のポッドへは、外を歩く）
+    assert not _access_world("N1", "N1").sheltered_route("OTM-002", "OTM-001")
     # 版 1 の地点データには屋根付きの地点が無い
     v1 = StageWorld.from_stage(load_stage(SAMPLE_STAGE))
-    assert not v1.same_shelter("OTM-001", "OTM-001")
+    assert not v1.sheltered_route("OTM-001", "OTM-001")
+
+
+def _access_world(access: str | None, pod: str | None) -> StageWorld:
+    """勤務地 OTM-001 は屋根なしで、出入口から網 access へ入れる。OTM-002 は網 pod の屋根付きの地点（None なら屋根なし）。"""
+    world = _sheltered_world(None, pod)
+    data = world.stage.model_dump(mode="json")
+    data["spots"][0]["shelter_access"] = access
+    return StageWorld.from_stage(Stage.model_validate(data))
+
+
+def test_屋根なしの勤務地でも_出入口から入れる網の屋根の下のポッドなら_強い雨でも介入する() -> None:
+    # Given 勤務地は屋根なしだが、50 m 以内の出入口から網 N1 へ入れる。ポッドは N1 の屋根の下。終日 20 mm/h
+    result = _sheltered_run(_access_world("N1", "N1"), 20.0)
+    # Then 雨では見送らない
+    assert result.records[0].outcome == "intervened"
+    assert not any(r.reason == "rain" for r in result.records)
+
+
+@pytest.mark.parametrize(("access", "pod"), [("N2", "N1"), (None, "N1"), ("N1", None)])
+def test_入口の網が違うか_入口が無いか_ポッドが屋根なしなら_雨で見送る(
+    access: str | None, pod: str | None
+) -> None:
+    result = _sheltered_run(_access_world(access, pod), 20.0)
+    weather = [r for r in result.records if r.stage == "pet"]
+    assert weather and all(r.reason == "rain" for r in weather)
 
 
 def _rec(t_min: int, worker: str) -> Record:
